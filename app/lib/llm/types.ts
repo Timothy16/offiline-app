@@ -40,4 +40,6 @@ export interface LLMEngine {
   load(onProgress?: (p: LoadProgress) => void): Promise<void>
   /** Stream the assistant reply as text chunks. Abort via `opts.signal`. */
   generate(messages: ChatMessage[], opts?: GenerateOptions): AsyncIterable<string>
+  /** Free the model's memory (workers, wasm heap, GPU buffers). The engine is unusable afterwards. */
+  dispose(): Promise<void>
 }

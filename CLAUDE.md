@@ -62,10 +62,26 @@ public/                   PWA icons, self-hosted ORT wasm
 ## Commands
 
 - `npm run dev` — dev server (service worker is only active in production builds)
-- `npm run generate && npx serve .output/public` — production static build; use this to
-  test PWA install + offline
+- `npm run generate && npm run preview:static` — production static build on :4173 with the
+  same COOP/COEP headers as Vercel (`serve.json`); use this to test PWA install, offline, threads
+- `/bench` — temporary runtime benchmark page (transformers.js vs wllama)
 - WebGPU and service workers need a secure context: `localhost` works; phones need HTTPS
   (deploy to a static host or use a tunnel)
+
+## Deployment
+
+Vercel, static (`vercel.json`: `nuxt generate` → `.output/public`). COOP `same-origin` +
+COEP `require-corp` on every response enables `crossOriginIsolated` → multi-threaded WASM.
+Hugging Face downloads still work under COEP because they are CORS requests.
+
+## Runtime evaluation (in progress)
+
+transformers.js q8 on WASM measured ~1 tok/s single-thread on an i5-6200U. Candidate CPU path:
+llama.cpp via `@wllama/wllama` (`app/lib/llm/wllama-engine.ts`) with
+`unsloth/Qwen3-0.6B-GGUF` Q4_K_M (397 MB, stored in OPFS). ONNX q4 (919 MB, fp32 embeddings)
+was rejected: too big for 4 GB phones. Import wllama from `@wllama/wllama/esm/index.js`
+(its package `main` is broken). On Safari wllama's default "compat" mode loads from a CDN —
+must be self-hosted before iOS can work offline.
 
 ## Working style
 

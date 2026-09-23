@@ -7,6 +7,11 @@ type Stream = { push: (text: string) => void }
 
 type Request = WorkerRequest extends infer R ? R extends { id: number } ? Omit<R, 'id'> : never : never
 
+export interface TransformersEngineOptions {
+  /** WASM threads; default lets ONNX Runtime pick (needs cross-origin isolation for >1). */
+  threads?: number
+}
+
 export class TransformersEngine implements LLMEngine {
   private worker = new Worker(new URL('./llm.worker.ts', import.meta.url), { type: 'module' })
   private nextId = 1
@@ -15,7 +20,7 @@ export class TransformersEngine implements LLMEngine {
   private progressListener?: (p: LoadProgress) => void
   private loadPromise: Promise<void> | null = null
 
-  constructor() {
+  constructor(private opts: TransformersEngineOptions = {}) {
     this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const msg = e.data
       switch (msg.type) {
@@ -57,11 +62,17 @@ export class TransformersEngine implements LLMEngine {
 
   load(onProgress?: (p: LoadProgress) => void): Promise<void> {
     if (onProgress) this.progressListener = onProgress
-    this.loadPromise ??= this.call<void>({ type: 'load' }).done.catch((err) => {
+    this.loadPromise ??= this.call<void>({ type: 'load', threads: this.opts.threads }).done.catch((err) => {
       this.loadPromise = null
       throw err
     })
     return this.loadPromise
+  }
+
+  async dispose() {
+    this.worker.terminate()
+    for (const p of this.pending.values()) p.reject(new Error('Engine disposed'))
+    this.pending.clear()
   }
 
   async* generate(messages: ChatMessage[], opts: GenerateOptions = {}): AsyncIterable<string> {

@@ -78,7 +78,7 @@ async function fetchToCache(url: string, onBytes: (loaded: number, total: number
   await cache.put(url, new Response(new Blob(chunks as BlobPart[]), { headers: res.headers }))
 }
 
-async function load() {
+async function load(threads?: number) {
   const { variant: v, cached } = await pickVariant()
 
   // Aggregate per-file byte progress into one bar, throttled to keep postMessage traffic low.
@@ -114,6 +114,8 @@ async function load() {
       startInit()
     }
   }
+
+  if (threads) env.backends.onnx.wasm!.numThreads = threads
 
   // Self-hosted runtime, stored in the Cache API so later launches work offline.
   env.backends.onnx.wasm!.wasmPaths = { wasm: ortUrl(v, '.wasm'), mjs: ortUrl(v, '.mjs') }
@@ -176,7 +178,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       post({ type: 'result', id: msg.id, value: await inspect() })
     }
     else if (msg.type === 'load') {
-      loading ??= load().catch((err) => {
+      loading ??= load(msg.threads).catch((err) => {
         loading = null
         throw err
       })
