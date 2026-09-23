@@ -1,5 +1,5 @@
-// Persistent storage helpers. The model lives in the Cache API (managed by transformers.js);
-// persist() asks the browser not to evict it under storage pressure.
+// Persistent storage helpers. The model lives in OPFS (managed by wllama); persist() asks the
+// browser not to evict it under storage pressure.
 
 export async function requestPersistentStorage(): Promise<boolean> {
   if (!navigator.storage?.persist) return false

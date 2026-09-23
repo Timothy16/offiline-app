@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Temporary benchmark: same prompt through each engine config, to pick the V1 runtime.
 // Runs one config at a time and disposes it afterwards so memory numbers don't stack up.
-import { TransformersEngine } from '~/lib/llm/transformers-engine'
 import type { LLMEngine } from '~/lib/llm/types'
 import { WllamaEngine } from '~/lib/llm/wllama-engine'
 
@@ -28,8 +27,6 @@ const MAX_TOKENS = 128
 
 const env = ref({ isolated: false, cores: 0, deviceMemory: 0, webgpu: 'checking…' })
 const configs = ref<Config[]>([
-  { id: 'ort-1t', label: 'transformers.js · 1 thread', create: () => new TransformersEngine({ threads: 1 }) },
-  { id: 'ort-mt', label: 'transformers.js · multi-thread', create: () => new TransformersEngine() },
   { id: 'llama-cpu', label: 'wllama Q4_K_M · CPU multi-thread', create: () => new WllamaEngine({ gpu: false }) },
 ])
 const statusText = ref<Record<string, string>>({})

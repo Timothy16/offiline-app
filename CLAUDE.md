@@ -21,23 +21,28 @@ answer, computed locally on the device.
 
 ## Stack (decided)
 
-- Nuxt 4 (`app/` directory layout), Vue 3, TypeScript
+- Nuxt 4 (`app/` directory layout), Vue 3, TypeScript, static SPA (`ssr: false`, Nitro preset `static`)
 - PWA: `@vite-pwa/nuxt` (Workbox) — manifest + precached app shell
-- LLM: `onnx-community/Qwen3-0.6B-ONNX` via `@huggingface/transformers` (transformers.js)
-- Runtime: WebGPU when available, fallback to WASM/CPU
-- Inference runs in a **Web Worker** so the UI never freezes
-- ONNX Runtime `.wasm` files are self-hosted under `/ort/` (copied by `modules/ort-wasm.ts`;
-  transformers.js defaults to a CDN, which breaks offline). They are NOT precached by the service
-  worker (would cost 14–27 MB on first visit); they download with the model on the user's tap and
-  live in the same Cache API store (`transformers-cache`)
-- Variants: WebGPU + `shader-f16` → `q4f16` (~606 MB total); otherwise WASM → `q8` (~641 MB).
-  An already-cached variant is always preferred, so a browser update never triggers a re-download
+- LLM: **Qwen3-0.6B Q4_K_M GGUF** (`unsloth/Qwen3-0.6B-GGUF`, pinned commit, 397 MB) run by
+  **llama.cpp via `@wllama/wllama`** on CPU, multi-threaded. wllama runs its own worker and stores
+  the model in OPFS. Import from `@wllama/wllama/esm/index.js` (its package `main` is broken)
+- llama.cpp `wllama.wasm` (~8 MB) is bundled by Vite and runtime-cached by the service worker on
+  first use (not precached — would cost data on first visit)
+- WebGPU is available in wllama (`gpu: true`) but off by default: +12% on a laptop iGPU and
+  unreliable drivers on low-end Android. Revisit after phone benchmarks
 - TypeScript is pinned to 5.x (vue-tsc doesn't support TS 6+ yet); `npx nuxt typecheck`
+
+### Why not transformers.js (tested and removed)
+
+Benchmark on an i5-6200U (2 cores/4 threads, 8 GB), same prompt:
+transformers.js ONNX q8 (641 MB): 2.3 tok/s single-thread, 2.8 multi-thread, **2.4 GB page memory**.
+wllama Q4_K_M (405 MB incl. wasm): 4.6 tok/s CPU, 5.2 tok/s WebGPU, loads in ~12 s.
+ONNX q4 (919 MB) rejected: fp32 embedding table, too big for 4 GB phones.
 
 ## Design rules
 
 - The model is only reached through the `LLMEngine` interface (`load()` + `generate()`),
-  in `app/lib/llm/`. UI and composables never import transformers.js directly. This keeps
+  in `app/lib/llm/`. UI and components never import wllama directly — only `useLLM` picks the engine. This keeps
   the model/runtime swappable.
 - Voice (STT/TTS) comes later behind the same style of interface (`app/lib/voice/`).
   **Do not build voice yet**, but don't make choices that block it (e.g. keep the worker
@@ -51,12 +56,13 @@ answer, computed locally on the device.
 app/
   app.vue                 root shell
   pages/index.vue         chat screen
+  pages/bench.vue         temporary runtime benchmark (remove before launch)
   components/             Chat UI pieces, model download/progress
   composables/            useLLM (engine state), useChat (messages)
-  lib/llm/                LLMEngine interface, transformers.js engine, worker, device detect
+  lib/llm/                LLMEngine interface + WllamaEngine
   lib/storage.ts          storage.persist() + quota helpers
   lib/voice/              (future) STT/TTS interfaces — not built in V1
-public/                   PWA icons, self-hosted ORT wasm
+public/                   PWA icons
 ```
 
 ## Commands
@@ -64,7 +70,7 @@ public/                   PWA icons, self-hosted ORT wasm
 - `npm run dev` — dev server (service worker is only active in production builds)
 - `npm run generate && npm run preview:static` — production static build on :4173 with the
   same COOP/COEP headers as Vercel (`serve.json`); use this to test PWA install, offline, threads
-- `/bench` — temporary runtime benchmark page (transformers.js vs wllama)
+- `/bench` — temporary runtime benchmark (wllama CPU vs WebGPU); use it on real phones
 - WebGPU and service workers need a secure context: `localhost` works; phones need HTTPS
   (deploy to a static host or use a tunnel)
 
@@ -74,14 +80,12 @@ Vercel, static (`vercel.json`: `nuxt generate` → `.output/public`). COOP `same
 COEP `require-corp` on every response enables `crossOriginIsolated` → multi-threaded WASM.
 Hugging Face downloads still work under COEP because they are CORS requests.
 
-## Runtime evaluation (in progress)
+## Known follow-ups
 
-transformers.js q8 on WASM measured ~1 tok/s single-thread on an i5-6200U. Candidate CPU path:
-llama.cpp via `@wllama/wllama` (`app/lib/llm/wllama-engine.ts`) with
-`unsloth/Qwen3-0.6B-GGUF` Q4_K_M (397 MB, stored in OPFS). ONNX q4 (919 MB, fp32 embeddings)
-was rejected: too big for 4 GB phones. Import wllama from `@wllama/wllama/esm/index.js`
-(its package `main` is broken). On Safari wllama's default "compat" mode loads from a CDN —
-must be self-hosted before iOS can work offline.
+- iOS: wllama's Safari "compat" mode loads worker/wasm from a CDN by default — self-host it
+  before iOS can work offline. iOS users must "Add to Home Screen" (7-day eviction otherwise)
+- Verify the wllama wasm is served from the SW cache when fully offline (step 6)
+- Measure wllama memory on a real 4 GB Android phone
 
 ## Working style
 

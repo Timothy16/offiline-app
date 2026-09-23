@@ -4,7 +4,8 @@ import { LoggerWithoutDebug, Wllama, WllamaAbortError } from '@wllama/wllama/esm
 import wasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url'
 import type { ChatMessage, EngineStatus, GenerateOptions, LLMEngine, LoadProgress } from './types'
 
-const MODEL_URL = 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf'
+// Pinned to a commit so every user gets the exact file we benchmarked, even if the repo changes.
+const MODEL_URL = 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf'
 const MB = 1_000_000
 const DOWNLOAD_BYTES = (397 + 8) * MB // model + llama.cpp wasm
 

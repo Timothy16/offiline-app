@@ -1,6 +1,6 @@
 // App-wide model state. Components use this; only this file knows which LLMEngine is in use.
-import { TransformersEngine } from '~/lib/llm/transformers-engine'
 import type { ChatMessage, EngineStatus, GenerateOptions, LLMEngine, LoadProgress } from '~/lib/llm/types'
+import { WllamaEngine } from '~/lib/llm/wllama-engine'
 import { requestPersistentStorage } from '~/lib/storage'
 
 export type LLMPhase = 'idle' | 'checking' | 'needs-download' | 'downloading' | 'initializing' | 'ready' | 'error'
@@ -12,7 +12,8 @@ const error = ref<string | null>(null)
 const persisted = ref<boolean | null>(null)
 
 let engine: LLMEngine | null = null
-const getEngine = () => (engine ??= new TransformersEngine())
+// CPU by default: WebGPU gave only ~12% on a laptop iGPU and is unreliable on low-end Android.
+const getEngine = () => (engine ??= new WllamaEngine({ gpu: false }))
 
 async function init() {
   if (phase.value !== 'idle') return

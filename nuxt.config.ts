@@ -10,14 +10,11 @@ export default defineNuxtConfig({
   // for a static PWA (the service worker handles updates) and it fails offline.
   experimental: { appManifest: false },
 
-  modules: ['@vite-pwa/nuxt'],
+  // Plain static output even on Vercel (Nitro would otherwise auto-switch to its Vercel preset),
+  // so vercel.json headers and .output/public behave exactly like the local preview.
+  nitro: { preset: 'static' },
 
-  vite: {
-    // The LLM worker imports transformers.js; ES-module workers allow code-splitting.
-    worker: { format: 'es' },
-    // Pre-bundling breaks transformers.js' dynamic runtime loading in dev.
-    optimizeDeps: { exclude: ['@huggingface/transformers'] },
-  },
+  modules: ['@vite-pwa/nuxt'],
 
   app: {
     head: {
@@ -62,6 +59,13 @@ export default defineNuxtConfig({
       // Precache the whole app shell so it opens with no network.
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
       navigateFallback: '/',
+      // llama.cpp runtime (~8 MB): not precached (would cost data on first visit); cached the first
+      // time the model loads, which only happens after the user taps Download.
+      runtimeCaching: [{
+        urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.wasm'),
+        handler: 'CacheFirst',
+        options: { cacheName: 'runtime-wasm', expiration: { maxEntries: 4 } },
+      }],
       cleanupOutdatedCaches: true,
     },
     client: {
