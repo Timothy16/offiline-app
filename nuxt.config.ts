@@ -12,6 +12,13 @@ export default defineNuxtConfig({
 
   modules: ['@vite-pwa/nuxt'],
 
+  vite: {
+    // The LLM worker imports transformers.js; ES-module workers allow code-splitting.
+    worker: { format: 'es' },
+    // Pre-bundling breaks transformers.js' dynamic runtime loading in dev.
+    optimizeDeps: { exclude: ['@huggingface/transformers'] },
+  },
+
   app: {
     head: {
       htmlAttrs: { lang: 'en' },

@@ -22,3 +22,6 @@ logs
 .env
 .env.*
 !.env.example
+
+# Copied from onnxruntime-web at build time (modules/ort-wasm.ts)
+public/ort
