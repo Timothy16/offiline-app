@@ -25,6 +25,8 @@ export default defineNuxtConfig({
         { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
         { rel: 'icon', href: '/icons/logo.svg', type: 'image/svg+xml' },
         { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon-180x180.png' },
+        // In static HTML (not injected at runtime) so browsers detect installability reliably.
+        { rel: 'manifest', href: '/manifest.webmanifest' },
       ],
     },
   },
