@@ -26,8 +26,13 @@ answer, computed locally on the device.
 - LLM: `onnx-community/Qwen3-0.6B-ONNX` via `@huggingface/transformers` (transformers.js)
 - Runtime: WebGPU when available, fallback to WASM/CPU
 - Inference runs in a **Web Worker** so the UI never freezes
-- ONNX Runtime `.wasm` files are self-hosted and precached (transformers.js defaults to a
-  CDN — that breaks offline)
+- ONNX Runtime `.wasm` files are self-hosted under `/ort/` (copied by `modules/ort-wasm.ts`;
+  transformers.js defaults to a CDN, which breaks offline). They are NOT precached by the service
+  worker (would cost 14–27 MB on first visit); they download with the model on the user's tap and
+  live in the same Cache API store (`transformers-cache`)
+- Variants: WebGPU + `shader-f16` → `q4f16` (~606 MB total); otherwise WASM → `q8` (~641 MB).
+  An already-cached variant is always preferred, so a browser update never triggers a re-download
+- TypeScript is pinned to 5.x (vue-tsc doesn't support TS 6+ yet); `npx nuxt typecheck`
 
 ## Design rules
 
