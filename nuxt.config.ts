@@ -71,6 +71,9 @@ export default defineNuxtConfig({
       }],
       cleanupOutdatedCaches: true,
     },
+    // Skipping the >1 MB AI runtimes from precache is intended (see workbox above); by default
+    // vite-plugin-pwa fails the build when anything is skipped, so only warn.
+    showMaximumFileSizeToCacheInBytesWarning: true,
     client: {
       installPrompt: true,
     },
