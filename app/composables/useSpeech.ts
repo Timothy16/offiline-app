@@ -84,28 +84,29 @@ function say(text: string, { id = null, interrupt = true }: { id?: number | null
   return whenIdle()
 }
 
-/**
- * Speak a reply while it streams: push() per chunk, end() when done. With `interrupt: false`
- * it queues after whatever is being said (e.g. "You asked: …").
- */
-function stream(id: number | null = null, { interrupt = true }: { interrupt?: boolean } = {}) {
-  if (interrupt) {
-    stop()
-    lastSaid = ''
-  }
+/** Speak a reply while it streams: push() per chunk, end() when done. Interrupts anything else. */
+function stream(id: number | null = null) {
+  stop()
+  lastSaid = ''
   const splitter = new SentenceSplitter()
   const mine = session
   speakingId.value = id
   streamOpen = true
+  // Both return true when they handed something to the voice (used to time "first words").
   return {
-    push(chunk: string) {
-      if (mine === session) enqueue(splitter.push(chunk))
+    push(chunk: string): boolean {
+      if (mine !== session) return false
+      const sentences = splitter.push(chunk)
+      enqueue(sentences)
+      return sentences.length > 0 && enabled.value
     },
-    end() {
-      if (mine !== session) return
+    end(): boolean {
+      if (mine !== session) return false
       streamOpen = false
-      enqueue(splitter.flush())
+      const rest = splitter.flush()
+      enqueue(rest)
       if (!queue.length && !pumping) becameIdle()
+      return rest.length > 0 && enabled.value
     },
   }
 }

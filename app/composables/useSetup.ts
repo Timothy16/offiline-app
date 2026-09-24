@@ -51,6 +51,8 @@ async function load() {
     // Speech model first: it is small, so the bar moves right away.
     await stt.load(report(0))
     await llm.load(report(sttBytes))
+    phase.value = 'initializing'
+    await useChat().warmUp()
     downloadBytes.value = 0
     phase.value = 'ready'
   }

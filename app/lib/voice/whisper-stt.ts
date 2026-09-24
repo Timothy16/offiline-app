@@ -76,8 +76,8 @@ export class WhisperSTT implements STTEngine {
     await this.load()
     const result = await this.transcriber!.transcribe(new File([audio], 'speech.webm', { type: audio.type }), {
       lang: 'en',
-      // Big.LITTLE phone CPUs get slower past ~4 threads.
-      threads: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2)),
+      // Same rule as llama.cpp: half the logical CPUs (≈ physical/big cores), 2–4.
+      threads: Math.min(4, Math.max(2, Math.floor((navigator.hardwareConcurrency || 2) / 2))),
       suppress_non_speech: true,
       token_timestamps: false,
     })

@@ -16,22 +16,34 @@ export function toSpeakable(text: string): string {
 
 // A sentence ends at . ! ? followed by whitespace, or at a line break (list items, paragraphs).
 const BOUNDARY = /[.!?](?=\s)|\n/g
+// For the very first piece only, also break at , ; : so the voice starts sooner.
+const EARLY_BOUNDARY = /[.!?,;:](?=\s)|\n/g
+const EARLY_MIN_WORDS = 4
 
 export class SentenceSplitter {
   private buffer = ''
+  private started = false
 
   /** Add streamed text; returns any sentences that are now complete. */
   push(chunk: string): string[] {
     this.buffer += chunk
     const out: string[] = []
     let start = 0
-    for (const match of this.buffer.matchAll(BOUNDARY)) {
+    for (const match of this.buffer.matchAll(this.started ? BOUNDARY : EARLY_BOUNDARY)) {
       const end = match.index! + match[0].length
       const sentence = toSpeakable(this.buffer.slice(start, end))
       // "1." of a numbered list has no words yet: keep it and join it to the next part.
       if (!/\p{L}/u.test(sentence)) continue
+      // An early break needs a few words, or the voice would say "Well," and pause.
+      if (!this.started && !/[.!?]\s*$|\n$/.test(this.buffer.slice(start, end)) && sentence.split(' ').length < EARLY_MIN_WORDS) continue
       out.push(sentence)
       start = end
+      if (!this.started) {
+        this.started = true
+        // Remaining text is split normally; re-scan it with the sentence rule.
+        this.buffer = this.buffer.slice(start)
+        return [...out, ...this.push('')]
+      }
     }
     this.buffer = this.buffer.slice(start)
     return out

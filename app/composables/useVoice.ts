@@ -71,6 +71,7 @@ async function listen() {
   state.value = 'transcribing'
   show('Understanding…', 0)
   let text = ''
+  const sttStart = performance.now()
   try {
     text = await useSTT().transcribe(recording.blob)
   }
@@ -81,7 +82,7 @@ async function listen() {
     return
   }
   state.value = 'idle'
-  await handle(text)
+  await handle(text, Math.round(performance.now() - sttStart))
 }
 
 function didNotCatch() {
@@ -90,7 +91,7 @@ function didNotCatch() {
   useSpeech().say('Sorry, I didn\'t catch that. Tap the mic and try again.')
 }
 
-async function handle(text: string) {
+async function handle(text: string, sttMs?: number) {
   if (!/\p{L}/u.test(text)) return didNotCatch()
   show(`Heard: “${text}”`)
   const speech = useSpeech()
@@ -108,13 +109,13 @@ async function handle(text: string) {
   const match = matchCommand(text, useVoiceCommands().all())
   if (match) return match.command.run(match.args)
 
-  // Not a command: it's a question for the AI, answered aloud on the Chat screen.
+  // Not a command: it's a question for the AI, answered aloud on the Chat screen. No spoken
+  // echo (it delays the answer); the question is shown in the chat and in the caption.
   if (router && router.currentRoute.value.path !== '/') {
     quietNavigation = true
     await router.push('/')
   }
-  speech.say(`You asked: ${text}`)
-  useChat().send(text, { queueSpeech: true })
+  useChat().send(text, { sttMs })
 }
 
 /** For destructive commands: ask aloud, then listen for yes/no without another tap. */

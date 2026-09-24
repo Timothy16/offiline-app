@@ -23,7 +23,7 @@ export class MicRecorder {
   private stopRequested: (() => void) | null = null
 
   /** Records until silence/limit or stop(); resolves with the audio. Throws if the mic is blocked. */
-  async record({ silenceMs = 1300, noSpeechMs = 6000, maxMs = 15000, onLevel }: RecordOptions = {}): Promise<Recording> {
+  async record({ silenceMs = 800, noSpeechMs = 6000, maxMs = 15000, onLevel }: RecordOptions = {}): Promise<Recording> {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     })

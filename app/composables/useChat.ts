@@ -1,4 +1,4 @@
-// Conversation state, independent of how text is entered (keyboard now, voice later).
+// Conversation state, independent of how text is entered (keyboard or voice).
 import type { ChatMessage } from '~/lib/llm/types'
 
 export interface ChatEntry {
@@ -6,9 +6,23 @@ export interface ChatEntry {
   role: 'user' | 'assistant'
   content: string
   state: 'streaming' | 'done' | 'stopped' | 'error'
+  /** Where the time went, shown under the answer while we tune speed (ms). */
+  timing?: { sttMs?: number, firstTextMs?: number, firstSpeechMs?: number, totalMs?: number }
 }
 
-const SYSTEM_PROMPT = 'You are Afronet, a helpful assistant running offline on the user\'s phone. Answer clearly and briefly.'
+// Answers are spoken, so they must be short. Never mention "offline" here: a small model reads it
+// as "I have no information" and refuses. The prompt is processed once at startup (warmUp) and
+// then reused from llama.cpp's prompt cache.
+const SYSTEM_PROMPT = [
+  'You are Afronet, a friendly and helpful assistant.',
+  'Answer every question from your own knowledge in 1 to 3 short, simple sentences, as if speaking out loud.',
+  'Never refuse or say you cannot access information.',
+  'If a question is unclear, give the most likely answer, or ask one short question to clarify.',
+  'For current events, people in office, or prices, say what you know and that it may be out of date.',
+].join(' ')
+
+// ~1-3 spoken sentences; also caps how long a slow phone can spend on one answer.
+const MAX_ANSWER_TOKENS = 200
 
 // Model context is 2048 tokens; ~4000 chars of history (~1000 tokens) leaves room for the answer
 // and keeps prompt processing fast on low-end phones.
@@ -35,8 +49,16 @@ function buildContext(): ChatMessage[] {
   return [{ role: 'system', content: SYSTEM_PROMPT }, ...turns]
 }
 
-/** `queueSpeech`: read the answer after whatever is being said ("You asked: …") instead of cutting it off. */
-async function send(text: string, { queueSpeech = false }: { queueSpeech?: boolean } = {}) {
+/** Process the system prompt once after loading, so the first real question starts faster. */
+async function warmUp() {
+  const { generate } = useLLM()
+  for await (const _ of generate([{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: 'Hi' }], { maxNewTokens: 1 })) {
+    // discard: only the cached prompt matters
+  }
+}
+
+/** `sttMs`: how long speech recognition took, when the question was spoken (for the timing line). */
+async function send(text: string, { sttMs }: { sttMs?: number } = {}) {
   const content = text.trim()
   if (!content) return
   // A new question replaces an answer still being written (e.g. asked by voice mid-answer).
@@ -44,30 +66,35 @@ async function send(text: string, { queueSpeech = false }: { queueSpeech?: boole
     controller?.abort()
     await current
   }
-  current = answer(content, queueSpeech)
+  current = answer(content, sttMs)
   return current
 }
 
-async function answer(content: string, queueSpeech: boolean) {
+async function answer(content: string, sttMs?: number) {
   const { generate } = useLLM()
   const speech = useSpeech()
 
   messages.value.push({ id: nextId++, role: 'user', content, state: 'done' })
   const context = buildContext()
-  messages.value.push({ id: nextId++, role: 'assistant', content: '', state: 'streaming' })
+  messages.value.push({ id: nextId++, role: 'assistant', content: '', state: 'streaming', timing: { sttMs } })
   const reply = messages.value[messages.value.length - 1]!
+  const timing = reply.timing!
 
   busy.value = true
   controller = new AbortController()
-  // Read the answer aloud sentence by sentence while it is still being written.
-  const voice = speech.stream(reply.id, { interrupt: !queueSpeech })
+  // Read the answer aloud while it is still being written (first phrase, then sentence by sentence).
+  const voice = speech.stream(reply.id)
+  const start = performance.now()
+  const since = () => Math.round(performance.now() - start)
   try {
-    for await (const chunk of generate(context, { signal: controller.signal })) {
+    for await (const chunk of generate(context, { signal: controller.signal, maxNewTokens: MAX_ANSWER_TOKENS })) {
+      timing.firstTextMs ??= since()
       reply.content += chunk
-      voice.push(chunk)
+      if (voice.push(chunk)) timing.firstSpeechMs ??= since()
     }
     reply.state = controller.signal.aborted ? 'stopped' : 'done'
-    voice.end()
+    if (voice.end()) timing.firstSpeechMs ??= since()
+    timing.totalMs = since()
   }
   catch (err) {
     reply.state = 'error'
@@ -93,5 +120,5 @@ function clear() {
 }
 
 export function useChat() {
-  return { messages: readonly(messages), busy: readonly(busy), send, stop, clear }
+  return { messages: readonly(messages), busy: readonly(busy), send, stop, clear, warmUp }
 }

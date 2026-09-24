@@ -7,6 +7,17 @@ const props = defineProps<{ messages: readonly Readonly<ChatEntry>[] }>()
 const speech = useSpeech()
 const canSpeak = computed(() => !!speech.status.value?.available && speech.enabled.value)
 
+const sec = (ms?: number) => (ms === undefined ? '–' : `${(ms / 1000).toFixed(1)} s`)
+/** Temporary speed readout while we tune performance. */
+function timingLine(t: NonNullable<ChatEntry['timing']>) {
+  return [
+    t.sttMs !== undefined && `understood ${sec(t.sttMs)}`,
+    `first text ${sec(t.firstTextMs)}`,
+    t.firstSpeechMs !== undefined && `first words spoken ${sec(t.firstSpeechMs)}`,
+    `done ${sec(t.totalMs)}`,
+  ].filter(Boolean).join(' · ')
+}
+
 function toggleRead(m: Readonly<ChatEntry>) {
   if (speech.speakingId.value === m.id) speech.stop()
   else speech.say(m.content, { id: m.id })
@@ -59,6 +70,7 @@ watch(() => props.messages.length, () => (stickToBottom = true))
         <!-- renderMarkdown escapes all HTML before adding formatting tags -->
         <div v-else class="md" v-html="renderMarkdown(m.content)" />
         <small v-if="m.state === 'stopped'" class="note">Stopped</small>
+        <small v-if="m.timing?.totalMs !== undefined" class="note timing">{{ timingLine(m.timing) }}</small>
         <button
           v-if="canSpeak && m.content && m.state !== 'streaming' && m.state !== 'error'"
           class="read"
@@ -177,6 +189,10 @@ watch(() => props.messages.length, () => (stickToBottom = true))
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.timing {
+  font-variant-numeric: tabular-nums;
 }
 
 .read {

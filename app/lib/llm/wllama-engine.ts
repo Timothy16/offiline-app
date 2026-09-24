@@ -83,6 +83,9 @@ export class WllamaEngine implements LLMEngine {
       stream: true,
       max_tokens: opts.maxNewTokens ?? 512,
       abortSignal: opts.signal,
+      // Reuse the already-processed start of the conversation (system prompt, earlier turns):
+      // only the new question has to be read, which is most of the wait on slow CPUs.
+      cache_prompt: true,
       chat_template_kwargs: { enable_thinking: false }, // Qwen3: skip the <think> block
       // Qwen3's recommended sampling for non-thinking mode.
       temperature: 0.7,
