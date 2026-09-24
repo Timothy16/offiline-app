@@ -1,0 +1,76 @@
+// Conversation state, independent of how text is entered (keyboard now, voice later).
+import type { ChatMessage } from '~/lib/llm/types'
+
+export interface ChatEntry {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  state: 'streaming' | 'done' | 'stopped' | 'error'
+}
+
+const SYSTEM_PROMPT = 'You are Afronet, a helpful assistant running offline on the user\'s phone. Answer clearly and briefly.'
+
+// Model context is 2048 tokens; ~4000 chars of history (~1000 tokens) leaves room for the answer
+// and keeps prompt processing fast on low-end phones.
+const MAX_HISTORY_CHARS = 4000
+
+const messages = ref<ChatEntry[]>([])
+const busy = ref(false)
+let controller: AbortController | null = null
+let nextId = 1
+
+/** Most recent turns that fit the budget, always starting on a user turn. */
+function buildContext(): ChatMessage[] {
+  const turns: ChatMessage[] = []
+  let chars = 0
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const m = messages.value[i]!
+    if (m.state === 'error' || (m.role === 'assistant' && !m.content)) continue
+    if (chars + m.content.length > MAX_HISTORY_CHARS && turns.length) break
+    turns.unshift({ role: m.role, content: m.content })
+    chars += m.content.length
+  }
+  while (turns[0]?.role === 'assistant') turns.shift()
+  return [{ role: 'system', content: SYSTEM_PROMPT }, ...turns]
+}
+
+async function send(text: string) {
+  const content = text.trim()
+  if (!content || busy.value) return
+  const { generate } = useLLM()
+
+  messages.value.push({ id: nextId++, role: 'user', content, state: 'done' })
+  const context = buildContext()
+  messages.value.push({ id: nextId++, role: 'assistant', content: '', state: 'streaming' })
+  const reply = messages.value[messages.value.length - 1]!
+
+  busy.value = true
+  controller = new AbortController()
+  try {
+    for await (const chunk of generate(context, { signal: controller.signal })) {
+      reply.content += chunk
+    }
+    reply.state = controller.signal.aborted ? 'stopped' : 'done'
+  }
+  catch (err) {
+    reply.state = 'error'
+    reply.content = err instanceof Error ? err.message : String(err)
+  }
+  finally {
+    busy.value = false
+    controller = null
+  }
+}
+
+function stop() {
+  controller?.abort()
+}
+
+function clear() {
+  if (busy.value) return
+  messages.value = []
+}
+
+export function useChat() {
+  return { messages: readonly(messages), busy: readonly(busy), send, stop, clear }
+}

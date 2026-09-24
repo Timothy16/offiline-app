@@ -11,6 +11,9 @@
   --muted: #8fa39c;
   --accent: #0f766e;
   --accent-text: #fef3c7;
+  --accent-soft: #5eead4;
+  --border: #1f3430;
+  --danger: #fca5a5;
   color-scheme: dark;
 }
 

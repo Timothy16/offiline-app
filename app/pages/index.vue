@@ -1,42 +1,14 @@
 <script setup lang="ts">
-// Step 4 test bench: proves download → cache → WebGPU/WASM inference → streaming.
-// The real chat UI replaces this in step 5.
-const { phase, status, progress, error, persisted, init, load, generate } = useLLM()
+// Chat screen: header, model setup (first run) or conversation, input bar.
+const { $pwa } = useNuxtApp()
+const { phase, init } = useLLM()
+const { messages, busy, send, stop, clear } = useChat()
 
+const draft = ref('')
 const online = ref(true)
-const prompt = ref('Explain in two sentences why the sky is blue.')
-const output = ref('')
-const busy = ref(false)
-const timing = ref<{ firstChunkMs: number, totalMs: number, chunks: number } | null>(null)
-const controller = shallowRef<AbortController | null>(null)
-
-const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`
-const percent = computed(() =>
-  progress.value.total ? Math.min(100, Math.round((progress.value.loaded / progress.value.total) * 100)) : 0,
-)
-
-async function ask() {
-  busy.value = true
-  output.value = ''
-  controller.value = new AbortController()
-  const start = performance.now()
-  let first = 0
-  let chunks = 0
-  try {
-    for await (const text of generate([{ role: 'user', content: prompt.value }], { signal: controller.value.signal })) {
-      if (!first) first = performance.now() - start
-      chunks++
-      output.value += text
-    }
-  }
-  catch (err) {
-    output.value += `\n[error: ${err instanceof Error ? err.message : err}]`
-  }
-  finally {
-    timing.value = { firstChunkMs: Math.round(first), totalMs: Math.round(performance.now() - start), chunks }
-    busy.value = false
-  }
-}
+const ready = computed(() => phase.value === 'ready')
+// Once the model is on the device the chat stays visible while it (re)loads.
+const showChat = computed(() => ready.value || messages.value.length > 0)
 
 function updateOnline() {
   online.value = navigator.onLine
@@ -56,135 +28,76 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="bench">
-    <h1>Afronet · engine test</h1>
+  <div class="app">
+    <header>
+      <img src="/icons/logo.svg" alt="" width="28" height="28">
+      <h1>Afronet</h1>
+      <span v-if="!online" class="pill">Offline</span>
+      <span class="spacer" />
+      <button v-if="$pwa?.showInstallPrompt && !$pwa?.isPWAInstalled" class="link" @click="$pwa.install()">
+        Install
+      </button>
+      <button v-if="messages.length && !busy" class="link" aria-label="Start a new chat" @click="clear()">
+        New chat
+      </button>
+    </header>
 
-    <ul class="status">
-      <li>Network: <strong>{{ online ? 'online' : 'offline' }}</strong></li>
-      <li>Engine: <strong>{{ phase }}</strong></li>
-      <li v-if="status">
-        Model: <strong>{{ status.model }} · {{ status.dtype }} on {{ status.device }}</strong>
-      </li>
-      <li v-if="status">Stored on device: <strong>{{ status.cached ? 'yes' : 'no' }}</strong></li>
-      <li v-if="persisted !== null">Persistent storage: <strong>{{ persisted ? 'granted' : 'not granted' }}</strong></li>
-    </ul>
+    <ChatThread v-if="showChat" :messages="messages" @suggest="draft = $event" />
+    <ModelSetup v-else />
 
-    <button v-if="phase === 'needs-download' && status" @click="load()">
-      Download model ({{ mb(status.downloadBytes) }})
-    </button>
-
-    <div v-if="phase === 'downloading'" class="progress">
-      <div class="bar"><div :style="{ width: `${percent}%` }" /></div>
-      <small>{{ mb(progress.loaded) }} / {{ mb(progress.total) }} · {{ percent }}%</small>
-    </div>
-    <p v-if="phase === 'initializing'">Preparing model…</p>
-    <p v-if="error" class="error">{{ error }}</p>
-
-    <section v-if="phase === 'ready'" class="ask">
-      <textarea v-model="prompt" rows="3" />
-      <div class="row">
-        <button :disabled="busy || !prompt.trim()" @click="ask()">Ask</button>
-        <button v-if="busy" class="secondary" @click="controller?.abort()">Stop</button>
-      </div>
-      <pre class="output">{{ output }}</pre>
-      <small v-if="timing">
-        first text {{ timing.firstChunkMs }} ms · total {{ timing.totalMs }} ms · {{ timing.chunks }} chunks
-      </small>
-    </section>
-  </main>
+    <ChatInput
+      v-if="showChat"
+      v-model="draft"
+      :disabled="!ready"
+      :busy="busy"
+      @send="send"
+      @stop="stop"
+    />
+  </div>
 </template>
 
 <style scoped>
-.bench {
+.app {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 640px;
+  height: 100dvh;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 24px 16px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
-.status {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.8;
-}
-
-.status strong {
-  color: var(--text);
-}
-
-button {
-  padding: 12px 20px;
-  border: 0;
+.pill {
+  padding: 2px 10px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 1rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.link {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-soft);
+  font-size: 0.9rem;
   cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-}
-
-button.secondary {
-  background: var(--surface);
-  color: var(--text);
-}
-
-.progress .bar {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.progress .bar div {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s;
-}
-
-.error {
-  color: #fca5a5;
-}
-
-.ask {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-}
-
-textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--surface);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-
-.output {
-  min-height: 4em;
-  margin: 0;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--surface);
-  white-space: pre-wrap;
-  font: inherit;
 }
 </style>
