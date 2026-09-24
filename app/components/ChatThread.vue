@@ -4,6 +4,13 @@ import type { ChatEntry } from '~/composables/useChat'
 import { renderMarkdown } from '~/lib/markdown'
 
 const props = defineProps<{ messages: readonly Readonly<ChatEntry>[] }>()
+const speech = useSpeech()
+const canSpeak = computed(() => !!speech.status.value?.available && speech.enabled.value)
+
+function toggleRead(m: Readonly<ChatEntry>) {
+  if (speech.speakingId.value === m.id) speech.stop()
+  else speech.say(m.content, m.id)
+}
 const emit = defineEmits<{ suggest: [text: string] }>()
 
 const SUGGESTIONS = [
@@ -52,6 +59,16 @@ watch(() => props.messages.length, () => (stickToBottom = true))
         <!-- renderMarkdown escapes all HTML before adding formatting tags -->
         <div v-else class="md" v-html="renderMarkdown(m.content)" />
         <small v-if="m.state === 'stopped'" class="note">Stopped</small>
+        <button
+          v-if="canSpeak && m.content && m.state !== 'streaming' && m.state !== 'error'"
+          class="read"
+          :aria-label="speech.speakingId.value === m.id ? 'Stop reading' : 'Read aloud'"
+          @click="toggleRead(m)"
+        >
+          <svg v-if="speech.speakingId.value === m.id" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
+          <svg v-else viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          {{ speech.speakingId.value === m.id ? 'Stop' : 'Listen' }}
+        </button>
       </div>
     </template>
 
@@ -160,6 +177,20 @@ watch(() => props.messages.length, () => (stickToBottom = true))
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.read {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-soft);
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .typing {

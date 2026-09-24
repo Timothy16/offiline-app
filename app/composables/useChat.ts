@@ -38,6 +38,7 @@ async function send(text: string) {
   const content = text.trim()
   if (!content || busy.value) return
   const { generate } = useLLM()
+  const speech = useSpeech()
 
   messages.value.push({ id: nextId++, role: 'user', content, state: 'done' })
   const context = buildContext()
@@ -46,15 +47,20 @@ async function send(text: string) {
 
   busy.value = true
   controller = new AbortController()
+  // Read the answer aloud sentence by sentence while it is still being written.
+  const voice = speech.stream(reply.id)
   try {
     for await (const chunk of generate(context, { signal: controller.signal })) {
       reply.content += chunk
+      voice.push(chunk)
     }
     reply.state = controller.signal.aborted ? 'stopped' : 'done'
+    voice.end()
   }
   catch (err) {
     reply.state = 'error'
     reply.content = err instanceof Error ? err.message : String(err)
+    speech.say('Sorry, I could not answer that.')
   }
   finally {
     busy.value = false
@@ -62,12 +68,15 @@ async function send(text: string) {
   }
 }
 
+/** Stop everything: the answer being written and anything being read aloud. */
 function stop() {
   controller?.abort()
+  useSpeech().stop()
 }
 
 function clear() {
   if (busy.value) return
+  useSpeech().stop()
   messages.value = []
 }
 

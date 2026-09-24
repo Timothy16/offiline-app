@@ -3,6 +3,7 @@
 const { $pwa } = useNuxtApp()
 const { phase, init } = useLLM()
 const { messages, busy, send, stop, clear } = useChat()
+const speech = useSpeech()
 
 const draft = ref('')
 const online = ref(true)
@@ -19,6 +20,7 @@ onMounted(() => {
   window.addEventListener('online', updateOnline)
   window.addEventListener('offline', updateOnline)
   init()
+  speech.init()
 })
 
 onBeforeUnmount(() => {
@@ -37,6 +39,19 @@ onBeforeUnmount(() => {
       <button v-if="$pwa?.showInstallPrompt && !$pwa?.isPWAInstalled" class="link" @click="$pwa.install()">
         Install
       </button>
+      <button
+        v-if="speech.status.value?.available"
+        class="icon"
+        :aria-label="speech.enabled.value ? 'Turn voice off' : 'Turn voice on'"
+        :aria-pressed="speech.enabled.value"
+        @click="speech.setEnabled(!speech.enabled.value)"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+          <path v-if="speech.enabled.value" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <path v-else d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
       <button v-if="messages.length && !busy" class="link" aria-label="Start a new chat" @click="clear()">
         New chat
       </button>
@@ -49,7 +64,7 @@ onBeforeUnmount(() => {
       v-if="showChat"
       v-model="draft"
       :disabled="!ready"
-      :busy="busy"
+      :busy="busy || speech.speaking.value"
       @send="send"
       @stop="stop"
     />
@@ -88,6 +103,18 @@ h1 {
 
 .spacer {
   flex: 1;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent-soft);
+  cursor: pointer;
 }
 
 .link {

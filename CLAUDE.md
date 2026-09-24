@@ -44,11 +44,37 @@ ONNX q4 (919 MB) rejected: fp32 embedding table, too big for 4 GB phones.
 - The model is only reached through the `LLMEngine` interface (`load()` + `generate()`),
   in `app/lib/llm/`. UI and components never import wllama directly — only `useLLM` picks the engine. This keeps
   the model/runtime swappable.
-- Voice (STT/TTS) comes later behind the same style of interface (`app/lib/voice/`).
-  **Do not build voice yet**, but don't make choices that block it (e.g. keep the worker
-  and engine generic, keep chat state independent of input method).
+- Voice lives behind small interfaces in `app/lib/voice/` (TTS: `speak`/`stop`; STT:
+  `load`/`transcribe`), chosen only in composables — same swappability rule as the LLM.
 - Qwen3 "thinking" mode is disabled (`enable_thinking: false`) — saves tokens and time.
 - Keep chat history sent to the model short (trim old turns) to bound memory on 4 GB phones.
+
+## Voice spec (V1, English — agreed with the user)
+
+Voice-first app, not "chat with a mic". Build order (user tests on desktop after each step, then mobile):
+1. Read aloud with the built-in voice (`speechSynthesis`, offline voice preferred) — fallback forever
+2. Phone benchmark: Whisper tiny.en vs base.en + Piper speed/memory alongside the chat model
+3. Piper natural voice (~60 MB) by default, automatic fallback to built-in voice
+4. FAQ screen with placeholder questions (screens in V1: Chat, FAQ)
+5. One floating mic button on every screen (tap to talk). Speech is a **command** (matched first,
+   instant, forgiving: "go to FAQ", "go back", "new chat", "read question 2", "stop") or else a
+   **question** sent to the AI and answered aloud. No text box review — the app acts immediately
+6. Voice questions → chat answered aloud; one combined setup download (chat + STT + voice +
+   wake word, ~600–700 MB)
+7. "Hey Afronet" wake word: custom openWakeWord model, opt-in Hands-free mode, only while the
+   app is open on screen (browser limit); mic button always stays
+8. Polish: permissions, errors, memory on a 4 GB phone
+
+Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
+answers); speech is interruptible (mic tap / "stop"); say what was heard ("You asked: …",
+"Opening FAQ"); "Sorry, I didn't catch that" on empty/unclear; destructive commands ask
+"Are you sure?". More languages come later — keep command phrases and voices per-language.
+
+## Future features (not V1)
+
+- Resumable model download (today an interrupted download restarts from 0)
+- More languages (STT, voices, command phrases), iOS support, lite model for weakest phones
+- Wake word with the screen off / app in background (needs a native Android app)
 
 ## Layout
 
@@ -61,7 +87,7 @@ app/
   composables/            useLLM (engine state), useChat (messages)
   lib/llm/                LLMEngine interface + WllamaEngine
   lib/storage.ts          storage.persist() + quota helpers
-  lib/voice/              (future) STT/TTS interfaces — not built in V1
+  lib/voice/              TTS/STT interfaces + engines
 public/                   PWA icons
 ```
 
