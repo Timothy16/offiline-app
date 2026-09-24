@@ -1,6 +1,8 @@
 <template>
   <NuxtRouteAnnouncer />
-  <NuxtPage />
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
 </template>
 
 <style>
@@ -14,6 +16,7 @@
   --accent-soft: #5eead4;
   --border: #1f3430;
   --danger: #fca5a5;
+  --danger-strong: #dc2626;
   color-scheme: dark;
 }
 

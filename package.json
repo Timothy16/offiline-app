@@ -11,6 +11,8 @@
     "preview:static": "serve .output/public -l 4173 -c ../../serve.json"
   },
   "dependencies": {
+    "@transcribe/shout": "^1.0.7",
+    "@transcribe/transcriber": "^3.0.1",
     "@wllama/wllama": "^3.6.1",
     "nuxt": "^4.5.2",
     "vue": "^3.5.43",

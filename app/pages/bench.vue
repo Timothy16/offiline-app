@@ -4,6 +4,9 @@
 import type { LLMEngine } from '~/lib/llm/types'
 import { WllamaEngine } from '~/lib/llm/wllama-engine'
 
+// No app shell here: the layout would load the app's own models alongside the benchmark's.
+definePageMeta({ layout: false })
+
 interface Config {
   id: string
   label: string

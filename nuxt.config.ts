@@ -58,13 +58,16 @@ export default defineNuxtConfig({
     workbox: {
       // Precache the whole app shell so it opens with no network.
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+      // The shell is small; anything over 1 MB is an AI runtime — llama.cpp (~8 MB), whisper.cpp
+      // (~1.5 MB ×2). Those would cost data on first visit, so they're cached on first use instead
+      // (models only load after the user taps Download).
+      maximumFileSizeToCacheInBytes: 1_000_000,
       navigateFallback: '/',
-      // llama.cpp runtime (~8 MB): not precached (would cost data on first visit); cached the first
-      // time the model loads, which only happens after the user taps Download.
       runtimeCaching: [{
-        urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.endsWith('.wasm'),
+        // Build files have content-hashed names, so a cached copy is always the right one.
+        urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/'),
         handler: 'CacheFirst',
-        options: { cacheName: 'runtime-wasm', expiration: { maxEntries: 4 } },
+        options: { cacheName: 'runtime-assets', expiration: { maxEntries: 20 } },
       }],
       cleanupOutdatedCaches: true,
     },

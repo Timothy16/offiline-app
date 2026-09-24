@@ -20,6 +20,18 @@ let queue: string[] = []
 let session = 0
 let pumping = false
 let streamOpen = false
+/** Resolved when the app goes quiet (finished or stopped): lets callers wait for a prompt. */
+let idleWaiters: (() => void)[] = []
+/** Everything said since the last interruption, for "repeat". */
+let lastSaid = ''
+
+function becameIdle() {
+  speaking.value = false
+  speakingId.value = null
+  const waiters = idleWaiters
+  idleWaiters = []
+  waiters.forEach(w => w())
+}
 
 async function pump() {
   if (pumping) return
@@ -32,15 +44,13 @@ async function pump() {
   // A loop from before stop() must not touch state that now belongs to a newer session.
   if (mine !== session) return
   pumping = false
-  if (!streamOpen) {
-    speaking.value = false
-    speakingId.value = null
-  }
+  if (!streamOpen) becameIdle()
 }
 
 function enqueue(sentences: string[]) {
   if (!enabled.value || !sentences.length) return
   queue.push(...sentences)
+  lastSaid += `${sentences.join(' ')} `
   pump()
 }
 
@@ -50,21 +60,39 @@ function stop() {
   streamOpen = false
   getEngine().stop()
   pumping = false
-  speaking.value = false
-  speakingId.value = null
+  becameIdle()
 }
 
-/** Speak a complete text now, interrupting anything else (confirmations, replays). */
-function say(text: string, id: number | null = null) {
-  stop()
-  if (!enabled.value) return
-  speakingId.value = id
+/** Resolves once nothing is being said (immediately if already quiet). */
+function whenIdle(): Promise<void> {
+  if (!speaking.value && !queue.length && !streamOpen) return Promise.resolve()
+  return new Promise(resolve => idleWaiters.push(resolve))
+}
+
+/**
+ * Speak a complete text, interrupting anything else by default. Resolves when it has been said
+ * (or was interrupted), so callers can e.g. listen for an answer right after a question.
+ */
+function say(text: string, { id = null, interrupt = true }: { id?: number | null, interrupt?: boolean } = {}) {
+  if (interrupt) {
+    stop()
+    lastSaid = ''
+  }
+  if (!enabled.value) return Promise.resolve()
+  if (id !== null) speakingId.value = id
   enqueue(new SentenceSplitter().push(`${text}\n`))
+  return whenIdle()
 }
 
-/** Speak a reply while it streams: call push() per chunk and end() when done. */
-function stream(id: number | null = null) {
-  stop()
+/**
+ * Speak a reply while it streams: push() per chunk, end() when done. With `interrupt: false`
+ * it queues after whatever is being said (e.g. "You asked: …").
+ */
+function stream(id: number | null = null, { interrupt = true }: { interrupt?: boolean } = {}) {
+  if (interrupt) {
+    stop()
+    lastSaid = ''
+  }
   const splitter = new SentenceSplitter()
   const mine = session
   speakingId.value = id
@@ -77,12 +105,17 @@ function stream(id: number | null = null) {
       if (mine !== session) return
       streamOpen = false
       enqueue(splitter.flush())
-      if (!queue.length && !pumping) {
-        speaking.value = false
-        speakingId.value = null
-      }
+      if (!queue.length && !pumping) becameIdle()
     },
   }
+}
+
+/** Say the last thing again ("repeat"). Returns false when there is nothing to repeat. */
+function repeat(): boolean {
+  const text = lastSaid.trim()
+  if (!text) return false
+  say(text)
+  return true
 }
 
 function setEnabled(value: boolean) {
@@ -112,6 +145,8 @@ export function useSpeech() {
     say,
     stream,
     stop,
+    repeat,
+    whenIdle,
     setEnabled,
   }
 }

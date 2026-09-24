@@ -17,6 +17,7 @@ const MAX_HISTORY_CHARS = 4000
 const messages = ref<ChatEntry[]>([])
 const busy = ref(false)
 let controller: AbortController | null = null
+let current: Promise<void> | null = null
 let nextId = 1
 
 /** Most recent turns that fit the budget, always starting on a user turn. */
@@ -34,9 +35,20 @@ function buildContext(): ChatMessage[] {
   return [{ role: 'system', content: SYSTEM_PROMPT }, ...turns]
 }
 
-async function send(text: string) {
+/** `queueSpeech`: read the answer after whatever is being said ("You asked: …") instead of cutting it off. */
+async function send(text: string, { queueSpeech = false }: { queueSpeech?: boolean } = {}) {
   const content = text.trim()
-  if (!content || busy.value) return
+  if (!content) return
+  // A new question replaces an answer still being written (e.g. asked by voice mid-answer).
+  if (busy.value) {
+    controller?.abort()
+    await current
+  }
+  current = answer(content, queueSpeech)
+  return current
+}
+
+async function answer(content: string, queueSpeech: boolean) {
   const { generate } = useLLM()
   const speech = useSpeech()
 
@@ -48,7 +60,7 @@ async function send(text: string) {
   busy.value = true
   controller = new AbortController()
   // Read the answer aloud sentence by sentence while it is still being written.
-  const voice = speech.stream(reply.id)
+  const voice = speech.stream(reply.id, { interrupt: !queueSpeech })
   try {
     for await (const chunk of generate(context, { signal: controller.signal })) {
       reply.content += chunk

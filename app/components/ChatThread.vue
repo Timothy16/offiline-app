@@ -9,7 +9,7 @@ const canSpeak = computed(() => !!speech.status.value?.available && speech.enabl
 
 function toggleRead(m: Readonly<ChatEntry>) {
   if (speech.speakingId.value === m.id) speech.stop()
-  else speech.say(m.content, m.id)
+  else speech.say(m.content, { id: m.id })
 }
 const emit = defineEmits<{ suggest: [text: string] }>()
 

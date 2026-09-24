@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// First-run card: explains the one-time download, shows progress, recovers from errors.
-const { phase, status, progress, error, load } = useLLM()
+// First-run card: explains the one-time download (chat + voice), shows progress, recovers from errors.
+const { phase, progress, error, downloadBytes, load } = useSetup()
 
 const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} MB`
 const percent = computed(() =>
@@ -15,24 +15,24 @@ const percent = computed(() =>
       <p class="muted">Checking your device…</p>
     </template>
 
-    <template v-else-if="phase === 'needs-download' && status">
+    <template v-else-if="phase === 'needs-download'">
       <h2>Set up your offline AI</h2>
       <p>
-        Afronet downloads a small AI model <strong>once</strong>. After that it works with
-        <strong>no internet</strong> — your questions never leave your phone.
+        Afronet downloads its AI and voice <strong>once</strong>. After that it works with
+        <strong>no internet</strong> — you can talk to it, and nothing you say leaves your phone.
       </p>
       <ul class="facts">
-        <li>Download size: <strong>{{ mb(status.downloadBytes) }}</strong></li>
+        <li>Download size: <strong>{{ mb(downloadBytes) }}</strong></li>
         <li>Use Wi-Fi if you can — mobile data may cost money</li>
         <li>Keep the app open until it finishes</li>
       </ul>
       <button class="primary" @click="load()">
-        Download ({{ mb(status.downloadBytes) }})
+        Download ({{ mb(downloadBytes) }})
       </button>
     </template>
 
     <template v-else-if="phase === 'downloading'">
-      <h2>Downloading AI model…</h2>
+      <h2>Downloading AI and voice…</h2>
       <div class="bar" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
         <div :style="{ width: `${percent}%` }" />
       </div>
@@ -49,7 +49,7 @@ const percent = computed(() =>
       <h2>Something went wrong</h2>
       <p class="error">{{ error }}</p>
       <p class="muted small">
-        {{ status?.cached ? 'The model is on your device. Try again.' : 'Check your connection and try again.' }}
+        {{ downloadBytes ? 'Check your connection and try again.' : 'Everything is on your device. Try again.' }}
       </p>
       <button class="primary" @click="load()">Try again</button>
     </template>

@@ -26,8 +26,8 @@ answer, computed locally on the device.
 - LLM: **Qwen3-0.6B Q4_K_M GGUF** (`unsloth/Qwen3-0.6B-GGUF`, pinned commit, 397 MB) run by
   **llama.cpp via `@wllama/wllama`** on CPU, multi-threaded. wllama runs its own worker and stores
   the model in OPFS. Import from `@wllama/wllama/esm/index.js` (its package `main` is broken)
-- llama.cpp `wllama.wasm` (~8 MB) is bundled by Vite and runtime-cached by the service worker on
-  first use (not precached — would cost data on first visit)
+- Service worker precaches only files < 1 MB (the shell); AI runtimes (llama.cpp ~8 MB, whisper.cpp
+  ~1.5 MB ×2) are runtime-cached (CacheFirst `/_nuxt/`) on first use, i.e. after setup
 - WebGPU is available in wllama (`gpu: true`) but off by default: +12% on a laptop iGPU and
   unreliable drivers on low-end Android. Revisit after phone benchmarks
 - TypeScript is pinned to 5.x (vue-tsc doesn't support TS 6+ yet); `npx nuxt typecheck`
@@ -51,19 +51,23 @@ ONNX q4 (919 MB) rejected: fp32 embedding table, too big for 4 GB phones.
 
 ## Voice spec (V1, English — agreed with the user)
 
-Voice-first app, not "chat with a mic". Build order (user tests on desktop after each step, then mobile):
-1. Read aloud with the built-in voice (`speechSynthesis`, offline voice preferred) — fallback forever
-2. Phone benchmark: Whisper tiny.en vs base.en + Piper speed/memory alongside the chat model
-3. Piper natural voice (~60 MB) by default, automatic fallback to built-in voice
-4. FAQ screen with placeholder questions (screens in V1: Chat, FAQ)
-5. One floating mic button on every screen (tap to talk). Speech is a **command** (matched first,
-   instant, forgiving: "go to FAQ", "go back", "new chat", "read question 2", "stop") or else a
-   **question** sent to the AI and answered aloud. No text box review — the app acts immediately
-6. Voice questions → chat answered aloud; one combined setup download (chat + STT + voice +
-   wake word, ~600–700 MB)
-7. "Hey Afronet" wake word: custom openWakeWord model, opt-in Hands-free mode, only while the
-   app is open on screen (browser limit); mic button always stays
-8. Polish: permissions, errors, memory on a 4 GB phone
+Voice-first app, not "chat with a mic". User tests on desktop after each step, then mobile.
+Done: read aloud (built-in voice, fallback forever); FAQ (placeholder questions; V1 screens: Chat,
+FAQ); mic on every screen (floating, or in the chat input bar) → speech is a **command** (matched
+first, instant, forgiving) or else a **question** sent to the AI and answered aloud — no text box
+review; one combined setup download (chat + speech recognition).
+Next: phone check of speed/memory → Piper natural voice (~60 MB, fallback to built-in) →
+"Hey Afronet" wake word (custom openWakeWord model, opt-in Hands-free mode, only while the app is
+open on screen; mic button always stays) → polish (permissions, errors, 4 GB memory).
+
+Speech recognition: whisper.cpp in WASM via `@transcribe/transcriber` + `@transcribe/shout` (MIT;
+not `@remotion/whisper-web` — its license needs a paid company license), model
+`ggml-base.en-q5_1.bin` (60 MB, pinned commit) in Cache API `afronet-models`. base.en over
+tiny.en because nothing is reviewed before acting (accuracy with accents matters). Runtime is
+dynamically imported. Recorder auto-stops on silence (`lib/voice/recorder.ts`).
+Commands: `lib/voice/commands.ts` (whole-sentence match, fillers dropped, number words → digits,
+1-letter mishearing tolerance); registry `useVoiceCommands` (layout = app-wide, pages add their
+own); pages declare `definePageMeta({ announce })` which is spoken on arrival.
 
 Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
 answers); speech is interruptible (mic tap / "stop"); say what was heard ("You asked: …",
@@ -81,10 +85,13 @@ answers); speech is interruptible (mic tap / "stop"); say what was heard ("You a
 ```
 app/
   app.vue                 root shell
+  layouts/default.vue     header, tabs, app-wide voice commands, announcements, floating mic
   pages/index.vue         chat screen
+  pages/faq.vue           FAQ (placeholder content), voice: "read question 3"
   pages/bench.vue         temporary runtime benchmark (remove before launch)
   components/             Chat UI pieces, model download/progress
-  composables/            useLLM (engine state), useChat (messages)
+  composables/            useSetup (one download), useLLM, useSTT, useChat, useSpeech (TTS
+                          queue), useVoice (mic pipeline), useVoiceCommands (registry)
   lib/llm/                LLMEngine interface + WllamaEngine
   lib/storage.ts          storage.persist() + quota helpers
   lib/voice/              TTS/STT interfaces + engines
