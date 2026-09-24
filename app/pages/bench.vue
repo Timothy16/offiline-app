@@ -148,6 +148,8 @@ onMounted(async () => {
   <main class="bench">
     <h1>Afronet · runtime benchmark</h1>
 
+    <SttBench />
+
     <ul class="status">
       <li>Cross-origin isolated (multi-thread): <strong>{{ env.isolated ? 'yes' : 'NO' }}</strong></li>
       <li>CPU threads: <strong>{{ env.cores }}</strong> · Device memory: <strong>{{ env.deviceMemory ? `${env.deviceMemory} GB` : 'n/a' }}</strong></li>

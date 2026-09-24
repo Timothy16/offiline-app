@@ -42,6 +42,9 @@ export class WhisperSTT implements STTEngine {
   private transcriber: FileTranscriber | null = null
   private loadPromise: Promise<void> | null = null
 
+  /** `threads`: override for benchmarking; default is half the logical CPUs (2–4). */
+  constructor(private opts: { threads?: number } = {}) {}
+
   async inspect(): Promise<STTStatus> {
     const cached = !!(await cachedModel().catch(() => undefined))
     return { model: 'Whisper base.en', cached, downloadBytes: cached ? 0 : MODEL_BYTES }
@@ -77,7 +80,7 @@ export class WhisperSTT implements STTEngine {
     const result = await this.transcriber!.transcribe(new File([audio], 'speech.webm', { type: audio.type }), {
       lang: 'en',
       // Same rule as llama.cpp: half the logical CPUs (≈ physical/big cores), 2–4.
-      threads: Math.min(4, Math.max(2, Math.floor((navigator.hardwareConcurrency || 2) / 2))),
+      threads: this.opts.threads ?? Math.min(4, Math.max(2, Math.floor((navigator.hardwareConcurrency || 2) / 2))),
       suppress_non_speech: true,
       token_timestamps: false,
     })
