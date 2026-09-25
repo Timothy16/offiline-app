@@ -1,7 +1,7 @@
 // First-run setup: ONE download for everything the app needs offline (chat model + speech
 // recognition), then loads both on every launch. Never downloads without the user's tap.
 import type { LoadProgress } from '~/lib/llm/types'
-import { requestPersistentStorage } from '~/lib/storage'
+import { requestPersistentStorage, waitForServiceWorkerControl } from '~/lib/storage'
 
 export type SetupPhase = 'idle' | 'checking' | 'needs-download' | 'downloading' | 'initializing' | 'ready' | 'error'
 
@@ -30,6 +30,8 @@ async function init() {
 async function load() {
   error.value = null
   persisted.value = await requestPersistentStorage()
+  // Runtime files fetched below must go through the service worker to be cached for offline.
+  if (downloadBytes.value) await waitForServiceWorkerControl()
   const llm = useLLM()
   const stt = useSTT()
   const sttBytes = stt.status.value?.downloadBytes ?? 0
@@ -48,7 +50,7 @@ async function load() {
   }
 
   try {
-    // Speech model first: it is small, so the bar moves right away.
+    // Speech model first: it is smaller, so the bar moves right away.
     await stt.load(report(0))
     await llm.load(report(sttBytes))
     phase.value = 'initializing'

@@ -1,6 +1,7 @@
 // LLMEngine backed by llama.cpp (wllama) running a GGUF model. wllama runs its own worker and
 // stores downloaded models in OPFS. Multi-threading needs cross-origin isolation (COOP/COEP headers).
 import { LoggerWithoutDebug, Wllama, WllamaAbortError } from '@wllama/wllama/esm/index.js' // package 'main' is broken; use the built bundle
+import type { ResultTimings } from '@wllama/wllama/esm/types/oai-compat.js'
 import wasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url'
 import type { ChatMessage, EngineStatus, GenerateOptions, LLMEngine, LoadProgress } from './types'
 
@@ -83,8 +84,8 @@ export class WllamaEngine implements LLMEngine {
       stream: true,
       max_tokens: opts.maxNewTokens ?? 512,
       abortSignal: opts.signal,
-      // Reuse the already-processed start of the conversation (system prompt, earlier turns):
-      // only the new question has to be read, which is most of the wait on slow CPUs.
+      // llama.cpp's default, stated explicitly: reuse the already-processed start of the
+      // conversation so only the new text has to be read.
       cache_prompt: true,
       chat_template_kwargs: { enable_thinking: false }, // Qwen3: skip the <think> block
       // Qwen3's recommended sampling for non-thinking mode.
@@ -92,14 +93,29 @@ export class WllamaEngine implements LLMEngine {
       top_p: 0.8,
       top_k: 20,
     } as Parameters<Wllama['createChatCompletion']>[0] & { stream: true })
+    let timings: ResultTimings | undefined
+    let reasoningChars = 0
     try {
       for await (const chunk of stream) {
-        const text = chunk.choices[0]?.delta?.content
-        if (text) yield text
+        // llama.cpp attaches its own timings to the final chunk.
+        if (chunk.timings) timings = chunk.timings
+        const delta = chunk.choices[0]?.delta as { content?: string | null, reasoning_content?: string | null } | undefined
+        if (delta?.reasoning_content) reasoningChars += delta.reasoning_content.length
+        if (delta?.content) yield delta.content
       }
     }
     catch (err) {
       if (!(err instanceof WllamaAbortError)) throw err
+    }
+    if (timings) {
+      opts.onStats?.({
+        promptTokens: timings.prompt_n,
+        cachedTokens: timings.cache_n,
+        promptMs: timings.prompt_ms,
+        generatedTokens: timings.predicted_n,
+        generatedMs: timings.predicted_ms,
+        reasoningChars,
+      })
     }
   }
 

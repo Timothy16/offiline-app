@@ -58,16 +58,21 @@ export default defineNuxtConfig({
     workbox: {
       // Precache the whole app shell so it opens with no network.
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-      // The shell is small; anything over 1 MB is an AI runtime — llama.cpp (~8 MB), whisper.cpp
-      // (~1.5 MB ×2). Those would cost data on first visit, so they're cached on first use instead
+      // The shell is small; anything over 1 MB is an AI runtime — llama.cpp (~8 MB), Moonshine
+      // (~13 MB). Those would cost data on first visit, so they're cached on first use instead
       // (models only load after the user taps Download).
       maximumFileSizeToCacheInBytes: 1_000_000,
+      // Moonshine (served unbundled from /vendor/) is only needed after setup: cache it on use.
+      globIgnores: ['vendor/**'],
       navigateFallback: '/',
       runtimeCaching: [{
-        // Build files have content-hashed names, so a cached copy is always the right one.
-        urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/'),
+        // Build files have content-hashed names and /vendor/ paths carry the library version,
+        // so a cached copy is always the right one.
+        urlPattern: ({ url }) => url.origin === self.location.origin
+          && (url.pathname.startsWith('/_nuxt/') || url.pathname.startsWith('/vendor/')),
         handler: 'CacheFirst',
-        options: { cacheName: 'runtime-assets', expiration: { maxEntries: 20 } },
+        // Generous limit: evicting an AI runtime would break offline launch.
+        options: { cacheName: 'runtime-assets', expiration: { maxEntries: 120 } },
       }],
       cleanupOutdatedCaches: true,
     },

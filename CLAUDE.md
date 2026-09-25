@@ -26,8 +26,10 @@ answer, computed locally on the device.
 - LLM: **Qwen3-0.6B Q4_K_M GGUF** (`unsloth/Qwen3-0.6B-GGUF`, pinned commit, 397 MB) run by
   **llama.cpp via `@wllama/wllama`** on CPU, multi-threaded. wllama runs its own worker and stores
   the model in OPFS. Import from `@wllama/wllama/esm/index.js` (its package `main` is broken)
-- Service worker precaches only files < 1 MB (the shell); AI runtimes (llama.cpp ~8 MB, whisper.cpp
-  ~1.5 MB ×2) are runtime-cached (CacheFirst `/_nuxt/`) on first use, i.e. after setup
+- Service worker precaches only files < 1 MB (the shell, excluding `/vendor/`); AI runtimes
+  (llama.cpp ~8 MB, Moonshine ~13 MB) are runtime-cached (CacheFirst `/_nuxt/` + `/vendor/`) on first
+  use, i.e. during setup. vite-plugin-pwa must only *warn* about skipped big files
+  (`showMaximumFileSizeToCacheInBytesWarning`), or the Vercel build fails
 - WebGPU is available in wllama (`gpu: true`) but off by default: +12% on a laptop iGPU and
   unreliable drivers on low-end Android. Revisit after phone benchmarks
 - TypeScript is pinned to 5.x (vue-tsc doesn't support TS 6+ yet); `npx nuxt typecheck`
@@ -56,22 +58,38 @@ Done: read aloud (built-in voice, fallback forever); FAQ (placeholder questions;
 FAQ); mic on every screen (floating, or in the chat input bar) → speech is a **command** (matched
 first, instant, forgiving) or else a **question** sent to the AI and answered aloud — no text box
 review; one combined setup download (chat + speech recognition).
-Next: phone check of speed/memory → Piper natural voice (~60 MB, fallback to built-in) →
+Next: AI speed (use the llama.cpp timings now shown under answers) → phone check of memory →
+natural voice (Moonshine TTS: Kokoro/Piper voices with its MIT G2P — standard Piper needs GPL
+espeak-ng) →
 "Hey Afronet" wake word (custom openWakeWord model, opt-in Hands-free mode, only while the app is
 open on screen; mic button always stays) → polish (permissions, errors, 4 GB memory).
 
-Speech recognition: whisper.cpp in WASM via `@transcribe/transcriber` + `@transcribe/shout` (MIT;
-not `@remotion/whisper-web` — its license needs a paid company license), model
-`ggml-base.en-q5_1.bin` (60 MB, pinned commit) in Cache API `afronet-models`. base.en over
-tiny.en because nothing is reviewed before acting (accuracy with accents matters). Runtime is
-dynamically imported. Recorder auto-stops on silence (`lib/voice/recorder.ts`).
+Speech recognition: **Moonshine Tiny Streaming (English)** via the official
+`@moonshine-ai/moonshine-wasm` (MIT, pinned **0.1.5**), model files pinned to
+`download.moonshine.ai/model/tiny-streaming-en/quantized_26_07_30/` (51 MB, sizes verified on
+download) in Cache Storage `moonshine-models-v1`, runtime 13 MB. Streaming: transcribes while the
+user talks; its VAD ends phrases; we join lines until 450 ms without new speech (a pause mid-sentence
+must not split "read question … three"). Key terms `FAQ`, `Afronet` fix mishearings ("every kid").
+Measured: phone 0.5–0.7 s, desktop 0.1–0.2 s after end of speech (Whisper base.en in WASM: ~74 s —
+fixed 30 s window; tested and removed). One `Transcriber` shared; a fresh `MicTranscriber` per turn,
+`close()`d after (each start() creates a stream that stop() does not free).
+**The library is served unbundled from `/vendor/moonshine-wasm@<version>/`** (copied at build by
+`modules/moonshine-vendor.ts`, which fails the build if the installed version ≠ `MOONSHINE_VERSION`).
+Never let Vite bundle it: minification renames `downmixToMono`, which its AudioWorklet embeds by
+`toString()` → the worklet throws on every frame and hears nothing.
+The UI only says "Listening…" after `onReady` (mic really capturing) — words before that are lost.
+Setup waits for the service worker to control the page before downloading, or the runtimes fetched
+during setup would bypass it and never be cached for offline.
+E2E test recipe: headless Chrome with `--use-fake-device-for-media-stream
+--use-file-for-fake-audio-capture=<wav>%noloop` (WAVs from Windows SAPI), driven over CDP; use a
+SHORT --user-data-dir path (long paths break Cache Storage on Windows).
 Commands: `lib/voice/commands.ts` (whole-sentence match, fillers dropped, number words → digits,
 1-letter mishearing tolerance); registry `useVoiceCommands` (layout = app-wide, pages add their
 own); pages declare `definePageMeta({ announce })` which is spoken on arrival.
 
 Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
-answers); speech is interruptible (mic tap / "stop"); say what was heard ("You asked: …",
-"Opening FAQ"); "Sorry, I didn't catch that" on empty/unclear; destructive commands ask
+answers); speech is interruptible (mic tap / "stop"); show what was heard on screen (no spoken
+"You asked …" echo — user's choice, it delays the answer); "Sorry, I didn't catch that" on empty/unclear; destructive commands ask
 "Are you sure?". More languages come later — keep command phrases and voices per-language.
 
 ## Future features (not V1)

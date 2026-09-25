@@ -1,18 +1,17 @@
-// Voice input pipeline: tap → listen (auto-stops on silence) → transcribe → command or question.
-// No text box to review: the app acts immediately and says what it understood.
+// Voice input pipeline: tap → listen (the speech engine transcribes while you talk and detects
+// when you've finished) → command or question. No text box to review: the app acts immediately
+// and says what it understood.
 import type { Router } from 'vue-router'
 import { matchCommand, yesOrNo } from '~/lib/voice/commands'
-import { MicRecorder } from '~/lib/voice/recorder'
+import type { ListenSession } from '~/lib/voice/types'
 
-export type MicState = 'idle' | 'listening' | 'transcribing'
+export type MicState = 'idle' | 'starting' | 'listening' | 'finishing'
 
 const state = ref<MicState>('idle')
-/** 0..1 microphone level while listening, for the visual meter. */
-const level = ref(0)
-/** Short status line under the mic ("Listening…", "Heard: go to FAQ"). */
+/** Short status line near the mic ("Listening…", live words, "Heard: go to FAQ"). */
 const caption = ref('')
 
-const recorder = new MicRecorder()
+let session: ListenSession | null = null
 let router: Router | null = null
 let pendingConfirm: { run: () => void | Promise<void> } | null = null
 /** Set when voice navigation should not be announced (e.g. a question sent to Chat). */
@@ -31,8 +30,13 @@ function init(r: Router) {
 }
 
 async function tap() {
-  if (state.value === 'listening') return recorder.stop()
-  if (state.value === 'transcribing') return
+  // Second tap while the mic opens or listens: finish now and use what was heard so far.
+  if (state.value === 'listening' || state.value === 'starting') {
+    state.value = 'finishing'
+    session?.stop()
+    return
+  }
+  if (state.value === 'finishing') return
   await listen()
 }
 
@@ -46,43 +50,50 @@ async function listen() {
   // Tapping the mic interrupts everything: the answer being written and anything being said.
   useChat().stop()
 
-  state.value = 'listening'
-  show('Listening…', 0)
-  let recording
+  // "Starting" until the mic really captures: words spoken before that would be lost.
+  state.value = 'starting'
+  show('Starting the mic…', 0)
+  let lastWordsAt = 0
+  const current = useSTT().listen({
+    onReady: () => {
+      if (session !== current || state.value !== 'starting') return
+      state.value = 'listening'
+      show('Listening…', 0)
+    },
+    onPartial: (text) => {
+      lastWordsAt = performance.now()
+      if (text) show(`“${text}”`, 0)
+    },
+  })
+  session = current
+
+  let text: string
   try {
-    recording = await recorder.record({ onLevel: l => (level.value = l) })
+    text = await current.result
   }
   catch (err) {
-    state.value = 'idle'
+    if (session === current) {
+      session = null
+      state.value = 'idle'
+    }
     const blocked = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError')
+    const notFound = err instanceof DOMException && err.name === 'NotFoundError'
     const message = blocked
       ? 'The microphone is blocked. Please allow it in your browser settings.'
-      : 'I could not use the microphone.'
+      : notFound
+        ? 'I could not find a microphone on this device.'
+        : 'Sorry, something went wrong while listening.'
     show(message, 8000)
     speech.say(message)
     return
   }
-
-  if (!recording.hadSpeech) {
-    state.value = 'idle'
-    return didNotCatch()
-  }
-
-  state.value = 'transcribing'
-  show('Understanding…', 0)
-  let text = ''
-  const sttStart = performance.now()
-  try {
-    text = await useSTT().transcribe(recording.blob)
-  }
-  catch {
-    state.value = 'idle'
-    show('Something went wrong while listening.')
-    speech.say('Sorry, something went wrong while listening.')
-    return
-  }
+  // A newer turn replaced this one (it was cancelled): nothing to do.
+  if (session !== current) return
+  session = null
   state.value = 'idle'
-  await handle(text, Math.round(performance.now() - sttStart))
+  // Time from the last words appearing to having the final text.
+  const sttMs = lastWordsAt ? Math.round(performance.now() - lastWordsAt) : undefined
+  await handle(text, sttMs)
 }
 
 function didNotCatch() {
@@ -136,7 +147,6 @@ function consumeQuietNavigation() {
 export function useVoice() {
   return {
     state: readonly(state),
-    level: readonly(level),
     caption: readonly(caption),
     init,
     tap,

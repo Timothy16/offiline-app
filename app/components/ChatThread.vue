@@ -10,11 +10,16 @@ const canSpeak = computed(() => !!speech.status.value?.available && speech.enabl
 const sec = (ms?: number) => (ms === undefined ? '–' : `${(ms / 1000).toFixed(1)} s`)
 /** Temporary speed readout while we tune performance. */
 function timingLine(t: NonNullable<ChatEntry['timing']>) {
+  const m = t.model
   return [
     t.sttMs !== undefined && `understood ${sec(t.sttMs)}`,
     `first text ${sec(t.firstTextMs)}`,
     t.firstSpeechMs !== undefined && `first words spoken ${sec(t.firstSpeechMs)}`,
     `done ${sec(t.totalMs)}`,
+    // llama.cpp's own numbers: prompt tokens read (and reused from cache), tokens written.
+    m && `AI read ${m.promptTokens} tok (+${m.cachedTokens} cached) in ${sec(m.promptMs)}`,
+    m && `wrote ${m.generatedTokens} tok in ${sec(m.generatedMs)}`,
+    m?.reasoningChars && `hidden thinking ${m.reasoningChars} chars`,
   ].filter(Boolean).join(' · ')
 }
 

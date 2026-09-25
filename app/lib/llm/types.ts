@@ -28,9 +28,25 @@ export interface LoadProgress {
   total: number
 }
 
+/** Where the model spent its time on one answer (as reported by the runtime itself). */
+export interface GenerateStats {
+  /** Prompt tokens actually processed (the rest came from the prompt cache). */
+  promptTokens: number
+  /** Prompt tokens reused from the cache. */
+  cachedTokens: number
+  promptMs: number
+  /** All generated tokens, including any hidden reasoning. */
+  generatedTokens: number
+  generatedMs: number
+  /** Characters of hidden reasoning ("thinking") the model produced; should be 0. */
+  reasoningChars: number
+}
+
 export interface GenerateOptions {
   signal?: AbortSignal
   maxNewTokens?: number
+  /** Called once when the answer finishes, when the runtime reports timings. */
+  onStats?: (stats: GenerateStats) => void
 }
 
 export interface LLMEngine {

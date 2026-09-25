@@ -7,8 +7,9 @@ const setup = useSetup()
 
 const label = computed(() => ({
   idle: 'Tap to speak',
+  starting: 'Starting the microphone',
   listening: 'Listening — tap to finish',
-  transcribing: 'Understanding what you said',
+  finishing: 'Understanding what you said',
 }[voice.state.value]))
 </script>
 
@@ -19,12 +20,11 @@ const label = computed(() => ({
       type="button"
       class="mic"
       :class="voice.state.value"
-      :style="{ '--level': voice.level.value }"
       :aria-label="label"
-      :disabled="voice.state.value === 'transcribing'"
+      :disabled="voice.state.value === 'finishing'"
       @click="voice.tap()"
     >
-      <span v-if="voice.state.value === 'transcribing'" class="spinner" aria-hidden="true" />
+      <span v-if="voice.state.value === 'finishing' || voice.state.value === 'starting'" class="spinner" aria-hidden="true" />
       <svg v-else-if="voice.state.value === 'listening'" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" /></svg>
       <svg v-else viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
@@ -64,7 +64,6 @@ const label = computed(() => ({
 }
 
 .mic {
-  --level: 0;
   position: relative;
   flex-shrink: 0;
   display: grid;
@@ -94,7 +93,7 @@ const label = computed(() => ({
   height: 30px;
 }
 
-/* Listening: a ring that grows with the voice level, so users see they're being heard. */
+/* Listening: a pulsing ring, so users see the app is listening (live words show in the caption). */
 .mic.listening {
   background: var(--danger-strong);
   color: #fff;
@@ -107,9 +106,18 @@ const label = computed(() => ({
   inset: -4px;
   border-radius: 50%;
   border: 3px solid var(--danger-strong);
-  opacity: 0.6;
-  transform: scale(calc(1 + var(--level) * 0.5));
-  transition: transform 0.08s linear;
+  animation: pulse 1.2s ease-out infinite;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
 }
 
 .spinner {

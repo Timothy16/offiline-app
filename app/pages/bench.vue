@@ -3,6 +3,7 @@
 // Runs one config at a time and disposes it afterwards so memory numbers don't stack up.
 import type { LLMEngine } from '~/lib/llm/types'
 import { WllamaEngine } from '~/lib/llm/wllama-engine'
+import { MoonshineSTT } from '~/lib/voice/moonshine-stt'
 
 // No app shell here: the layout would load the app's own models alongside the benchmark's.
 definePageMeta({ layout: false })
@@ -125,6 +126,9 @@ async function run(c: Config) {
 }
 
 onMounted(async () => {
+  // Hook for automated end-to-end tests of the speech engine (this page is removed before launch).
+  ;(window as any).__afronetBench = { MoonshineSTT }
+
   let webgpu = 'no'
   const gpu = (navigator as any).gpu
   if (gpu) {
@@ -147,8 +151,6 @@ onMounted(async () => {
 <template>
   <main class="bench">
     <h1>Afronet · runtime benchmark</h1>
-
-    <SttBench />
 
     <ul class="status">
       <li>Cross-origin isolated (multi-thread): <strong>{{ env.isolated ? 'yes' : 'NO' }}</strong></li>

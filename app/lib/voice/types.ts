@@ -1,5 +1,5 @@
 // Voice contracts. Like LLMEngine, UI never touches a concrete engine — composables pick one,
-// so voices/languages/runtimes can be swapped (built-in voice now, Piper next).
+// so voices/languages/runtimes can be swapped.
 import type { LoadProgress } from '../llm/types'
 
 export interface TTSStatus {
@@ -21,17 +21,40 @@ export interface TTSEngine {
 
 export interface STTStatus {
   model: string
-  /** True when the model is stored on the device (works offline). */
+  /** True when every model file is stored on the device (works offline). */
   cached: boolean
   /** Bytes still to download before `load()` can finish offline. 0 when cached. */
   downloadBytes: number
+}
+
+export interface ListenOptions {
+  /**
+   * Called once the microphone is really capturing. Anything said before this is lost, so the
+   * UI must only invite the user to speak ("Listening…") from here on.
+   */
+  onReady?: () => void
+  /** Called with the words heard so far, while the user is still speaking. */
+  onPartial?: (text: string) => void
+}
+
+/** One spoken turn: the engine owns the microphone and decides when the user has finished. */
+export interface ListenSession {
+  /**
+   * Everything said in this turn ('' when nothing was heard). Rejects if the microphone can't
+   * be opened (e.g. permission denied: a DOMException named NotAllowedError).
+   */
+  result: Promise<string>
+  /** Finish now and keep what was heard (user tapped the mic again). */
+  stop(): void
+  /** Finish now and discard what was heard. */
+  cancel(): void
 }
 
 export interface STTEngine {
   inspect(): Promise<STTStatus>
   /** Download (first run only) and initialise the model. Safe to call more than once. */
   load(onProgress?: (p: LoadProgress) => void): Promise<void>
-  /** Turn a recording (any browser audio format) into text. */
-  transcribe(audio: Blob): Promise<string>
+  /** Open the microphone and transcribe one turn while it is spoken. */
+  listen(opts?: ListenOptions): ListenSession
   dispose(): Promise<void>
 }

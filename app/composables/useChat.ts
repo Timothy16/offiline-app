@@ -1,5 +1,5 @@
 // Conversation state, independent of how text is entered (keyboard or voice).
-import type { ChatMessage } from '~/lib/llm/types'
+import type { ChatMessage, GenerateStats } from '~/lib/llm/types'
 
 export interface ChatEntry {
   id: number
@@ -7,7 +7,7 @@ export interface ChatEntry {
   content: string
   state: 'streaming' | 'done' | 'stopped' | 'error'
   /** Where the time went, shown under the answer while we tune speed (ms). */
-  timing?: { sttMs?: number, firstTextMs?: number, firstSpeechMs?: number, totalMs?: number }
+  timing?: { sttMs?: number, firstTextMs?: number, firstSpeechMs?: number, totalMs?: number, model?: GenerateStats }
 }
 
 // Answers are spoken, so they must be short. Never mention "offline" here: a small model reads it
@@ -87,7 +87,12 @@ async function answer(content: string, sttMs?: number) {
   const start = performance.now()
   const since = () => Math.round(performance.now() - start)
   try {
-    for await (const chunk of generate(context, { signal: controller.signal, maxNewTokens: MAX_ANSWER_TOKENS })) {
+    const opts = {
+      signal: controller.signal,
+      maxNewTokens: MAX_ANSWER_TOKENS,
+      onStats: (s: GenerateStats) => (timing.model = s),
+    }
+    for await (const chunk of generate(context, opts)) {
       timing.firstTextMs ??= since()
       reply.content += chunk
       if (voice.push(chunk)) timing.firstSpeechMs ??= since()
