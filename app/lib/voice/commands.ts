@@ -27,16 +27,40 @@ const FILLERS = new Set([
   'page', 'screen', 'section', 'tab', 'number', 'again',
 ])
 
-/** Lowercase, drop punctuation, spell "F.A.Q." consistently. */
+// How the speech model writes the letters of "FAQ" when it doesn't know the acronym.
+const LETTER_F = new Set(['f', 'ef', 'eff'])
+const LETTER_A = new Set(['a', 'ay', 'eh', 'ei'])
+const LETTER_Q = new Set(['q', 'cue', 'queue', 'kew', 'kyu', 'que'])
+// Blended into one word: "effecue", "efacue", "effakyu", "fak"… (not "effect", "fake").
+const FAQ_BLENDED = /^e?ff?[aei]?[ckq](?:ue|ew|yu|u)?$/
+
+/** Spoken-letter spellings of "FAQ" become "faq" ("go to effecue", "open the f a q page"). */
+function normalizeFaq(words: string[]): string[] {
+  const out: string[] = []
+  for (let i = 0; i < words.length; i++) {
+    const [a, b, c] = [words[i]!, words[i + 1], words[i + 2]]
+    if (LETTER_F.has(a) && b && LETTER_A.has(b) && c && LETTER_Q.has(c)) {
+      out.push('faq')
+      i += 2
+    }
+    else {
+      out.push(FAQ_BLENDED.test(a) ? 'faq' : a)
+    }
+  }
+  return out
+}
+
+/** Lowercase, drop punctuation, spell "F.A.Q." (however it was heard) consistently. */
 function clean(text: string): string {
-  return text
+  const words = text
     .toLowerCase()
     // Join contractions ("that's" → "thats", "I'm" → "im") so phrases can list them simply.
     .replace(/['’]/g, '')
     .replace(/\bf\.?\s?a\.?\s?q\.?s?\b|\bfaqs\b/g, 'faq')
     .replace(/[^\p{L}\p{N}\s{}]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  return normalizeFaq(words).join(' ')
 }
 
 /** Tokens with fillers removed and number words turned into digits. */
@@ -142,4 +166,79 @@ export function matchNavigation(text: string, screens: readonly VoiceScreen[]): 
   const hasPlace = words.some(w => PLACE_WORDS.has(w))
   if (QUESTION_STARTS.has(words[0]!) && !hasPlace) return null
   return hasMove || hasPlace ? found[0]!.id : null
+}
+
+// Verbs that only mean "navigate" when followed by "to"/"back" ("take me to…", "go back to…"):
+// without it they're everyday requests ("take a photo").
+const NAV_VERBS = new Set(['go', 'goto', 'take', 'switch', 'navigate', 'bring', 'return', 'head', 'jump', 'move', 'back'])
+// Verbs that only mean "navigate" together with screen/page ("open the settings page"):
+// otherwise "show me how to cook rice" is a question.
+const VIEW_VERBS = new Set(['open', 'show', 'display', 'launch', 'visit'])
+// Politeness before the verb ("please", "can you", "hey Afronet").
+const POLITE = new Set(['please', 'can', 'could', 'would', 'will', 'you', 'hey', 'afronet', 'okay', 'ok', 'lets', 'let', 'us', 'just', 'kindly', 'now', 'so'])
+
+/** Letters that carry the sound of a word, for comparing a misheard word with a screen name. */
+function skeleton(word: string): string {
+  return word
+    .replace(/ph/g, 'f')
+    .replace(/[cq]/g, 'k')
+    .replace(/[aeiouyhw]/g, '')
+    .replace(/(.)\1+/g, '$1')
+}
+
+function editDistance2(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]!
+    row[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j]!
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = tmp
+    }
+  }
+  return row[b.length]!
+}
+
+/** Does a heard word plausibly sound like this screen name? ("church" ~ "chat", "affect" ~ "faq") */
+function soundsLike(heard: string, name: string): boolean {
+  if (heard.length < 3) return false
+  if (heard.slice(0, 2) === name.slice(0, 2) && heard.length <= 7) return true
+  const a = skeleton(heard)
+  const b = skeleton(name)
+  if (!a || !b) return false
+  return 1 - editDistance2(a, b) / Math.max(a.length, b.length) >= 0.6
+}
+
+export type NavigationGuess = { suggest: string } | { ask: true }
+
+/**
+ * For a sentence that is clearly trying to navigate but names no known screen (usually a mishearing:
+ * "go back to church" for "chat"): suggest the screen it sounds like, or ask where to go. Either way
+ * the sentence must not be sent to the AI as a question. Call only after matchNavigation failed.
+ * Returns null when the sentence doesn't look like navigation at all.
+ */
+export function guessNavigation(text: string, screens: readonly VoiceScreen[]): NavigationGuess | null {
+  const words = clean(text).split(' ').filter(Boolean)
+  if (!words.length || words.length > 8) return null
+  if (QUESTION_STARTS.has(words[0]!)) return null
+  let i = 0
+  while (i < words.length && POLITE.has(words[i]!)) i++
+  const verb = words[i]
+  const rest = words.slice(i + 1)
+  const hasPlace = words.some(w => PLACE_WORDS.has(w))
+  const navShaped
+    = (verb !== undefined && NAV_VERBS.has(verb) && rest.slice(0, 3).some(w => w === 'to' || w === 'back' || w === 'into'))
+      || (verb !== undefined && VIEW_VERBS.has(verb) && hasPlace)
+      || (hasPlace && words.length <= 6)
+  if (!navShaped) return null
+
+  // Candidate words: what's left after verbs, politeness and filler.
+  const skip = new Set([...NAV_VERBS, ...VIEW_VERBS, ...POLITE, ...PLACE_WORDS, 'to', 'the', 'me', 'my', 'a', 'an', 'into', 'of', 'please', 'i', 'im', 'going', 'want'])
+  const heard = words.filter(w => !skip.has(w))
+  const matches = screens.filter(s => s.names.some((name) => {
+    const nameWords = clean(name).split(' ')
+    return nameWords.length === 1 && heard.some(h => soundsLike(h, nameWords[0]!))
+  }))
+  return matches.length === 1 ? { suggest: matches[0]!.id } : { ask: true }
 }

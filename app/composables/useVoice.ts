@@ -3,7 +3,7 @@
 // question → the app responds aloud → it keeps listening for a follow-up until you go quiet.
 // No text box to review: the app acts immediately; what it heard is shown on screen.
 import type { Router } from 'vue-router'
-import { matchCommand, matchNavigation, yesOrNo } from '~/lib/voice/commands'
+import { guessNavigation, matchCommand, matchNavigation, yesOrNo } from '~/lib/voice/commands'
 import { playCue } from '~/lib/voice/cues'
 import type { ListenSession } from '~/lib/voice/types'
 
@@ -17,7 +17,7 @@ const conversing = ref(false)
 
 let session: ListenSession | null = null
 let router: Router | null = null
-let pendingConfirm: { run: () => void | Promise<void> } | null = null
+let pendingConfirm: { run: () => void | Promise<void>, onNo: string } | null = null
 /** Set when voice navigation should not be announced (e.g. a question sent to Chat). */
 let quietNavigation = false
 let captionTimer: ReturnType<typeof setTimeout> | undefined
@@ -133,7 +133,7 @@ async function handle(text: string, sttMs?: number) {
     pendingConfirm = null
     const answer = yesOrNo(text)
     if (answer === 'yes') return confirm.run()
-    speech.say(answer === 'no' ? 'Okay, cancelled.' : 'Okay, I will leave it.')
+    speech.say(answer === 'no' ? confirm.onNo : 'Okay, I will leave it.')
     return
   }
 
@@ -146,7 +146,23 @@ async function handle(text: string, sttMs?: number) {
   const target = matchNavigation(text, screens)
   if (target) return screens.find(s => s.id === target)!.go()
 
-  // 3. Anything else is a question for the AI, answered aloud on the Chat screen. No spoken
+  // 3. Clearly trying to navigate, but the screen name was misheard ("go back to church"): never
+  // send that to the AI. Suggest what it sounds like, or ask where to go.
+  const guess = guessNavigation(text, screens)
+  if (guess) {
+    const options = screens.map(s => s.label).join(' or ')
+    if ('suggest' in guess) {
+      const screen = screens.find(s => s.id === guess.suggest)!
+      confirm(`Did you mean ${screen.label}?`, () => screen.go(), `Okay. Where would you like to go? You can say ${options}.`)
+    }
+    else {
+      conversing.value = true
+      speech.say(`Where would you like to go? You can say ${options}.`)
+    }
+    return
+  }
+
+  // 4. Anything else is a question for the AI, answered aloud on the Chat screen. No spoken
   // echo (it delays the answer); the question is shown in the chat and in the caption.
   if (router && router.currentRoute.value.path !== '/') {
     quietNavigation = true
@@ -197,9 +213,9 @@ function endConversation() {
   void playCue('done')
 }
 
-/** For destructive commands: ask aloud; the answer is taken by the next listening turn. */
-function confirm(prompt: string, run: () => void | Promise<void>) {
-  pendingConfirm = { run }
+/** Ask a yes/no question aloud; the answer is taken by the next listening turn. */
+function confirm(prompt: string, run: () => void | Promise<void>, onNo = 'Okay, cancelled.') {
+  pendingConfirm = { run, onNo }
   conversing.value = true
   show(prompt, 0)
   useSpeech().say(`${prompt} Say yes or no.`)

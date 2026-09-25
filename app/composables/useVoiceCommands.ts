@@ -9,7 +9,11 @@ export type RegisteredCommand = VoiceCommand & {
 }
 
 /** A screen plus how to get there; matched by meaning ("I'm going to the FAQ page"). */
-export type RegisteredScreen = VoiceScreen & { go: () => void | Promise<void> }
+export type RegisteredScreen = VoiceScreen & {
+  /** How the app names it when speaking ("the chat"), e.g. in "Did you mean the chat?". */
+  label: string
+  go: () => void | Promise<void>
+}
 
 const registered = shallowRef<RegisteredCommand[][]>([])
 const screens = shallowRef<RegisteredScreen[]>([])

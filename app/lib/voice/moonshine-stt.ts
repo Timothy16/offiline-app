@@ -30,9 +30,11 @@ const MODEL_FILES: Record<string, number> = {
 const RUNTIME_BYTES = 13_155_937 // moonshine.wasm, cached by the service worker on first use
 const CACHE_NAME = 'moonshine-models-v1' // the library's own cache bucket
 
-// Words the tiny model would otherwise mishear ("Go to FAQ" → "Go to every kid").
-// Keep short: every term slightly lowers accuracy on other words.
-const KEYTERMS = ['FAQ', 'Afronet']
+// Words the tiny model would otherwise mishear ("Go to FAQ" → "Go to every kid", "chat" →
+// "church"). Keep short: every term slightly lowers accuracy on other words.
+const KEYTERMS = ['FAQ', 'Afronet', 'chat', 'help']
+// Documented range 1.0–4.0 (default 2.0); higher favours the terms more. Tune with real voices.
+const KEYTERM_BOOST = '3.0'
 
 // A pause inside a sentence ("read question … three") can end a line. Wait this long after a
 // line ends for the user to continue before treating the turn as finished.
@@ -125,6 +127,7 @@ export class MoonshineSTT implements STTEngine {
           modelArch: this.lib.ModelArch.TinyStreaming,
           options: {
             keyterms: KEYTERMS.join(','),
+            keyterm_boost: KEYTERM_BOOST,
             // We only need text; don't keep a copy of every line's audio in memory.
             return_audio_data: 'false',
           },

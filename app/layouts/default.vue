@@ -42,8 +42,9 @@ async function goTo(path: string, name: string) {
 // Screens reachable by voice, matched by meaning ("I'm going to the chat screen"). Names must be
 // specific: "questions" alone would catch real questions.
 const screens: RegisteredScreen[] = [
-  { id: 'chat', names: ['chat', 'home', 'main screen', 'conversation'], go: () => goTo('/', 'chat') },
-  { id: 'faq', names: ['faq', 'frequently asked questions', 'questions and answers', 'help page'], go: () => goTo('/faq', 'FAQ') },
+  { id: 'chat', label: 'the chat', names: ['chat', 'home', 'main screen', 'conversation'], go: () => goTo('/', 'chat') },
+  // "Help" is easier to say (and to recognise) than the acronym FAQ.
+  { id: 'faq', label: 'the FAQ', names: ['faq', 'help', 'frequently asked questions', 'questions and answers', 'help page'], go: () => goTo('/faq', 'FAQ') },
 ]
 useVoiceCommands().registerScreens(screens)
 

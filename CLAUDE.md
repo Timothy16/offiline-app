@@ -86,11 +86,17 @@ SHORT --user-data-dir path (long paths break Cache Storage on Windows).
 Commands: `lib/voice/commands.ts` (whole-sentence match, fillers dropped, number words → digits,
 1-letter mishearing tolerance); registry `useVoiceCommands` (layout = app-wide, pages add their
 own); pages declare `definePageMeta({ announce })` which is spoken on arrival.
-Intent order (useVoice.handle): pending yes/no → exact commands → **navigation by meaning**
-(`matchNavigation`: short sentence naming ONE registered screen + a movement word or screen/page;
-question-openers like "is/what/how" without screen/page stay questions) → question for the AI.
-Screens are registered by the layout (`registerScreens`) with specific spoken names. Tests: phrase
-suites in the scratchpad style (40 navigation/ending + 25 command cases) — rerun after any change.
+Intent order (useVoice.handle): pending yes/no → exact commands → **navigation by meaning** →
+**did-you-mean** (`guessNavigation`: navigation-shaped sentence with an unknown/misheard screen —
+"go back to church" → "Did you mean the chat?"; unclear → "Where would you like to go?"; NEVER sent
+to the AI) → question for the AI. Spoken-letter FAQ spellings ("Effecue", "f a q") normalize to faq.
+Acronyms are hard to hear: FAQ also answers to "help". Real mishearings from the user's voice are
+in the test suite.
+Navigation by meaning (`matchNavigation`): short sentence naming ONE registered screen + a movement
+word or screen/page; question-openers like "is/what/how" without screen/page stay questions.
+Screens are registered by the layout (`registerScreens`) with specific spoken names and a spoken
+`label`. Tests: phrase suites (57 navigation/ending/mishearing + 25 command cases) — rerun after
+any matcher change; "show me how to cook rice", "take a photo" must stay questions.
 **Conversation mode**: after a voice turn the app waits until it has finished writing and speaking,
 then listens again; silence closes it quietly ("done" tone). "thanks/that's all/stop" end it;
 typing ends it. Sound cues (`lib/voice/cues.ts`, Web Audio, no files): listening / heard /
