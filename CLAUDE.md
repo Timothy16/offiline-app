@@ -86,6 +86,18 @@ SHORT --user-data-dir path (long paths break Cache Storage on Windows).
 Commands: `lib/voice/commands.ts` (whole-sentence match, fillers dropped, number words → digits,
 1-letter mishearing tolerance); registry `useVoiceCommands` (layout = app-wide, pages add their
 own); pages declare `definePageMeta({ announce })` which is spoken on arrival.
+Intent order (useVoice.handle): pending yes/no → exact commands → **navigation by meaning**
+(`matchNavigation`: short sentence naming ONE registered screen + a movement word or screen/page;
+question-openers like "is/what/how" without screen/page stay questions) → question for the AI.
+Screens are registered by the layout (`registerScreens`) with specific spoken names. Tests: phrase
+suites in the scratchpad style (40 navigation/ending + 25 command cases) — rerun after any change.
+**Conversation mode**: after a voice turn the app waits until it has finished writing and speaking,
+then listens again; silence closes it quietly ("done" tone). "thanks/that's all/stop" end it;
+typing ends it. Sound cues (`lib/voice/cues.ts`, Web Audio, no files): listening / heard /
+not-understood / done. "Are you sure?" is answered on the next conversation turn.
+AI tool calling (LLM decides actions) is planned as a fallback but NOT built: in the browser every
+token costs ~0.3 s on a slow CPU (llama.cpp prompt reading has no fast WASM matmul), so tool
+schemas/calls would add many seconds — measure first.
 
 Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
 answers); speech is interruptible (mic tap / "stop"); show what was heard on screen (no spoken

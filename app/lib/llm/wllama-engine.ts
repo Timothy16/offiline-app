@@ -59,6 +59,10 @@ export class WllamaEngine implements LLMEngine {
       await this.wllama.loadModelFromUrl(MODEL_URL, {
         n_ctx: 2048,
         n_threads: this.opts.threads,
+        // Qwen3's chat template writes earlier answers differently from how they were generated,
+        // so the cached prompt diverges at the previous answer and it would be read again (every
+        // token costs ~0.3 s on a slow CPU). Reuse matching chunks of >= 4 tokens by KV shifting.
+        n_cache_reuse: 4,
         n_gpu_layers: this.device === 'webgpu' ? 999 : 0,
         progressCallback: ({ loaded, total }) => {
           if (initStarted) return

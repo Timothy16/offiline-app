@@ -31,6 +31,8 @@ const FILLERS = new Set([
 function clean(text: string): string {
   return text
     .toLowerCase()
+    // Join contractions ("that's" → "thats", "I'm" → "im") so phrases can list them simply.
+    .replace(/['’]/g, '')
     .replace(/\bf\.?\s?a\.?\s?q\.?s?\b|\bfaqs\b/g, 'faq')
     .replace(/[^\p{L}\p{N}\s{}]/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -104,4 +106,40 @@ export function yesOrNo(text: string): 'yes' | 'no' | null {
   if (YES.has(said) || said.startsWith('yes ')) return 'yes'
   if (NO.has(said) || said.startsWith('no ')) return 'no'
   return null
+}
+
+/** A screen that can be reached by voice, e.g. { id: 'faq', names: ['faq', 'frequently asked questions'] }. */
+export interface VoiceScreen {
+  id: string
+  /** What people call it. Multi-word names are fine; keep them specific ("questions" alone is too vague). */
+  names: string[]
+}
+
+// Words that signal "take me somewhere". Forms like "going"/"goes" are listed because the speech
+// model often turns "go to" into "I'm going to".
+const MOVE_WORDS = new Set([
+  'go', 'goes', 'going', 'goto', 'open', 'opening', 'take', 'show', 'switch', 'move', 'navigate',
+  'bring', 'return', 'visit', 'display', 'launch', 'jump', 'head', 'back',
+])
+const PLACE_WORDS = new Set(['screen', 'page', 'tab', 'section'])
+// A sentence opening like this is asking something ("is it safe to go home…?"), unless it names a
+// screen/page. Polite requests ("can you take me to…") are not in this list on purpose.
+const QUESTION_STARTS = new Set(['what', 'whats', 'how', 'why', 'when', 'where', 'who', 'which', 'is', 'are', 'am', 'was', 'were', 'should', 'does', 'do', 'did', 'will', 'shall'])
+
+/**
+ * Understands navigation by meaning rather than exact phrases: a short sentence that names a screen
+ * plus a movement word ("I'm going to chat screen", "take me to the FAQ page", "back to chat") or a
+ * place word ("chat screen please"). Without either ("can you chat about malaria?") it stays a
+ * question for the AI. Returns the screen id, or null.
+ */
+export function matchNavigation(text: string, screens: readonly VoiceScreen[]): string | null {
+  const words = clean(text).split(' ').filter(Boolean)
+  if (!words.length || words.length > 8) return null
+  const joined = ` ${words.join(' ')} `
+  const found = screens.filter(s => s.names.some(name => joined.includes(` ${clean(name)} `)))
+  if (found.length !== 1) return null // none, or ambiguous ("go from chat to faq")
+  const hasMove = words.some(w => MOVE_WORDS.has(w))
+  const hasPlace = words.some(w => PLACE_WORDS.has(w))
+  if (QUESTION_STARTS.has(words[0]!) && !hasPlace) return null
+  return hasMove || hasPlace ? found[0]!.id : null
 }

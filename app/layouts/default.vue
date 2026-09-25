@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Shared shell: header + tabs, app-wide voice commands, screen announcements, floating mic.
-import type { RegisteredCommand } from '~/composables/useVoiceCommands'
+import type { RegisteredCommand, RegisteredScreen } from '~/composables/useVoiceCommands'
 
 const { $pwa } = useNuxtApp()
 const route = useRoute()
@@ -33,13 +33,35 @@ function goBack() {
   else speech.say('You are already on the first screen.')
 }
 
+/** Open a screen by voice; if already there, say so (silence would feel broken). */
+async function goTo(path: string, name: string) {
+  if (route.path === path) await speech.say(`You are on the ${name}.`)
+  else await router.push(path)
+}
+
+// Screens reachable by voice, matched by meaning ("I'm going to the chat screen"). Names must be
+// specific: "questions" alone would catch real questions.
+const screens: RegisteredScreen[] = [
+  { id: 'chat', names: ['chat', 'home', 'main screen', 'conversation'], go: () => goTo('/', 'chat') },
+  { id: 'faq', names: ['faq', 'frequently asked questions', 'questions and answers', 'help page'], go: () => goTo('/faq', 'FAQ') },
+]
+useVoiceCommands().registerScreens(screens)
+
 // Commands that work on every screen. Screens add their own (see pages/*.vue).
 const commands: RegisteredCommand[] = [
-  { id: 'go-faq', help: 'go to FAQ', phrases: ['go faq', 'open faq', 'show faq', 'faq', 'frequently asked questions', 'take faq', 'questions and answers'], run: () => route.path === '/faq' ? speech.say('You are on the FAQ.') : router.push('/faq') },
-  { id: 'go-chat', help: 'go to chat', phrases: ['go chat', 'open chat', 'chat', 'go home', 'home', 'take chat', 'take home'], run: () => route.path === '/' ? speech.say('You are on the chat.') : router.push('/') },
+  // One-word screen names ("FAQ", "chat") have no movement word, so they're listed here too.
+  { id: 'go-faq', help: 'go to FAQ', phrases: ['faq', 'frequently asked questions', 'questions and answers'], run: () => goTo('/faq', 'FAQ') },
+  { id: 'go-chat', help: 'go to chat', phrases: ['chat', 'home'], run: () => goTo('/', 'chat') },
   { id: 'back', help: 'go back', phrases: ['go back', 'back', 'previous', 'return'], run: goBack },
   { id: 'new-chat', help: 'new chat', phrases: ['new chat', 'start new chat', 'clear chat', 'clear conversation', 'start over', 'new conversation'], run: newChat },
-  { id: 'stop', phrases: ['stop', 'be quiet', 'quiet', 'cancel', 'enough', 'pause', 'shut up', 'stop talking', 'silence'], run: () => useChat().stop() },
+  { id: 'stop', phrases: ['stop', 'be quiet', 'quiet', 'cancel', 'enough', 'pause', 'shut up', 'stop talking', 'silence', 'stop listening'], run: () => {
+    useChat().stop()
+    voice.endConversation()
+  } },
+  { id: 'end', phrases: ['thanks', 'thank you', 'thats all', 'that is all', 'goodbye', 'bye', 'never mind', 'nothing', 'no thanks', 'done', 'im done', 'all done'], run: async () => {
+    await speech.say('Okay.')
+    voice.endConversation()
+  } },
   { id: 'repeat', help: 'repeat', phrases: ['repeat', 'say that', 'read that', 'what did you say', 'come again', 'repeat that'], run: () => speech.repeat() || speech.say('There is nothing to repeat yet.') },
   { id: 'help', help: 'help', phrases: ['help', 'what can say', 'what can do', 'commands', 'voice commands', 'how does this work'], run: () => {
     const hints = useVoiceCommands().all().map(c => c.help).filter(Boolean)

@@ -44,7 +44,23 @@ function toggle(i: number) {
   }
 }
 
+/** "Next one" / "previous question" / "read it again" continue from the last question read. */
+function readRelative(step: number) {
+  if (open.value === null) {
+    speech.say('Say read question and a number, for example read question one.')
+    return
+  }
+  const n = open.value + 1 + step
+  if (n < 1) speech.say('That was the first question.')
+  else if (n > FAQS.length) speech.say(`That was the last question. There are ${FAQS.length}.`)
+  else readQuestion(n)
+}
+
 useVoiceCommands([
+  { id: 'faq-next', help: 'next question', phrases: ['next', 'next one', 'next question', 'read next', 'read next one', 'read next question', 'continue'], run: () => readRelative(1) },
+  // Not plain "previous": that stays the app-wide "go back".
+  { id: 'faq-prev', phrases: ['previous one', 'previous question', 'read previous', 'read previous question', 'last one', 'one before'], run: () => readRelative(-1) },
+  { id: 'faq-again', phrases: ['read it again', 'again', 'read again', 'repeat question', 'same question'], run: () => readRelative(0) },
   { id: 'faq-read', help: 'read question and a number', phrases: ['read question {n}', 'question {n}', 'read {n}', 'open question {n}', 'read {n} question', 'play question {n}', 'answer {n}'], run: ({ n }) => readQuestion(n!) },
   { id: 'faq-list', help: 'read all questions', phrases: ['read questions', 'read all questions', 'list questions', 'what are questions', 'all questions'], run: readAll },
 ])

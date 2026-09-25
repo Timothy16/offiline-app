@@ -10,6 +10,12 @@ const voice = useVoice()
 const speech = useSpeech()
 const { messages, busy, send, stop } = useChat()
 
+/** A typed question ends any spoken conversation, so the mic doesn't reopen after the answer. */
+function sendTyped(text: string) {
+  voice.endConversation()
+  send(text)
+}
+
 const draft = ref('')
 const ready = computed(() => setup.phase.value === 'ready')
 // Once there is a conversation it stays visible while the models (re)load.
@@ -36,7 +42,7 @@ useVoiceCommands([
     v-model="draft"
     :disabled="!ready"
     :busy="busy || speech.speaking.value"
-    @send="send"
+    @send="sendTyped"
     @stop="stop"
   >
     <template #leading>
