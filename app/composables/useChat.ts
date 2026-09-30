@@ -7,7 +7,7 @@ export interface ChatEntry {
   content: string
   state: 'streaming' | 'done' | 'stopped' | 'error'
   /** Where the time went, shown under the answer while we tune speed (ms). */
-  timing?: { sttMs?: number, firstTextMs?: number, firstSpeechMs?: number, totalMs?: number, model?: GenerateStats }
+  timing?: { sttMs?: number, firstTextMs?: number, firstSpeechMs?: number, totalMs?: number, model?: GenerateStats, voice?: string }
 }
 
 // Answers are spoken, so they must be short. Never mention "offline" here: a small model reads it
@@ -95,10 +95,16 @@ async function answer(content: string, sttMs?: number) {
     for await (const chunk of generate(context, opts)) {
       timing.firstTextMs ??= since()
       reply.content += chunk
-      if (voice.push(chunk)) timing.firstSpeechMs ??= since()
+      if (voice.push(chunk)) {
+        timing.firstSpeechMs ??= since()
+        timing.voice ??= speech.voiceName()
+      }
     }
     reply.state = controller.signal.aborted ? 'stopped' : 'done'
-    if (voice.end()) timing.firstSpeechMs ??= since()
+    if (voice.end()) {
+      timing.firstSpeechMs ??= since()
+      timing.voice ??= speech.voiceName()
+    }
     timing.totalMs = since()
   }
   catch (err) {

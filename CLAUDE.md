@@ -104,8 +104,10 @@ AI tool calling (LLM decides actions) is planned as a fallback but NOT built: in
 token costs ~0.3 s on a slow CPU (llama.cpp prompt reading has no fast WASM matmul), so tool
 schemas/calls would add many seconds — measure first.
 
-Natural voice (decided with the user: **100% offline, male British**): Kokoro **George**
-(`kokoro_bm_george`, top-graded British male with Fable) via Moonshine TTS, language `en_gb` (uses
+Natural voice (decided with the user: **100% offline**; currently Kokoro **Emma**, British female,
+`kokoro_bf_emma`, Kokoro's top British grade B- — chosen so testers can tell it from the built-in
+voice; the user first picked male British = George `kokoro_bm_george`, grade C; switching is three
+constants in `moonshine-tts.ts`, only the 0.5 MB voice file differs) via Moonshine TTS, language `en_gb` (uses
 the `en_us` G2P files), 10 files / 109 MB from `download.moonshine.ai/tts/` (UNVERSIONED paths →
 sizes verified on download; a changed file is rejected and the built-in voice stays).
 `lib/voice/moonshine-tts.ts` drives the library's internal `tts-worker-host.js` directly, not its

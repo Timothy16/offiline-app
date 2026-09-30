@@ -56,6 +56,11 @@ function getEngine(): TTSEngine {
   return fallback
 }
 
+/** Which voice is speaking right now, for the timing line ("Emma (British)" or "phone voice"). */
+function voiceName(): string {
+  return naturalReady.value && natural && !natural.tooSlow ? (status.value?.voice ?? 'natural voice') : 'phone voice'
+}
+
 /** Stop using the natural voice on this device and free its memory and worker. */
 function retireNatural() {
   naturalReady.value = false
@@ -244,6 +249,7 @@ export function useSpeech() {
     naturalBytes: readonly(naturalBytes),
     naturalTooSlow: readonly(naturalTooSlow),
     knownTooSlow,
+    voiceName,
     init,
     inspectNatural,
     loadNatural,

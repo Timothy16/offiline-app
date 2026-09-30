@@ -20,6 +20,7 @@ function timingLine(t: NonNullable<ChatEntry['timing']>) {
     m && `AI read ${m.promptTokens} tok (+${m.cachedTokens} cached) in ${sec(m.promptMs)}`,
     m && `wrote ${m.generatedTokens} tok in ${sec(m.generatedMs)}`,
     m?.reasoningChars && `hidden thinking ${m.reasoningChars} chars`,
+    t.voice && `voice: ${t.voice}`,
   ].filter(Boolean).join(' · ')
 }
 

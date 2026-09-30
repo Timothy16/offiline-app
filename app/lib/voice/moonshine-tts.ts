@@ -1,4 +1,4 @@
-// Natural offline voice: Kokoro "George" (British male) through Moonshine's text-to-speech (MIT,
+// Natural offline voice: Kokoro "Emma" (British female) through Moonshine's text-to-speech (MIT,
 // own G2P — no GPL espeak-ng). 100% on-device; the system voice (WebSpeechTTS) stays the fallback.
 //
 // We drive the library's TTS *worker* directly instead of its `TextToSpeech` class because:
@@ -12,10 +12,14 @@ import { MOONSHINE_BASE } from './moonshine-version'
 import type { TTSEngine, TTSStatus } from './types'
 
 const LANGUAGE = 'en_gb'
-const VOICE = 'kokoro_bm_george'
-const VOICE_NAME = 'George (British)'
+// Kokoro's highest-graded British voice (B-). Clearly different from most built-in phone voices,
+// which makes it obvious when the natural voice is the one speaking. To change voice, change these
+// three names; every Kokoro voice uses the same model files plus its own ~0.5 MB voice file.
+const VOICE = 'kokoro_bf_emma'
+const VOICE_NAME = 'Emma (British)'
+const VOICE_FILE = 'kokoro/voices/bf_emma.kokorovoice'
 
-// From the library's own dependency manifest for en_gb + kokoro_bm_george (en_gb uses the en_us
+// From the library's own dependency manifest for en_gb + this voice (en_gb uses the en_us
 // pronunciation files). NOTE: these CDN paths carry no version, so sizes are verified on download;
 // if a file changes upstream the download is rejected and the app keeps the system voice.
 const ASSET_BASE = 'https://download.moonshine.ai/tts/'
@@ -29,7 +33,7 @@ const FILES: AssetManifest = {
   'kokoro/decoder.model.ort': 39_257_640,
   'kokoro/decoder.weights.ort': 15_299_512,
   'kokoro/config.json': 2_351,
-  'kokoro/voices/bm_george.kokorovoice': 522_252,
+  [VOICE_FILE]: 522_252,
 }
 
 // Speech stutters if a sentence takes longer to synthesize than to say (ratio > 1). Measured on a
