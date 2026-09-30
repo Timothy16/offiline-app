@@ -58,9 +58,8 @@ Done: read aloud (built-in voice, fallback forever); FAQ (placeholder questions;
 FAQ); mic on every screen (floating, or in the chat input bar) → speech is a **command** (matched
 first, instant, forgiving) or else a **question** sent to the AI and answered aloud — no text box
 review; one combined setup download (chat + speech recognition).
-Next: AI speed (use the llama.cpp timings now shown under answers) → phone check of memory →
-natural voice (Moonshine TTS: Kokoro/Piper voices with its MIT G2P — standard Piper needs GPL
-espeak-ng) →
+Next: AI speed (use the llama.cpp timings now shown under answers) → phone check of memory with
+chat + listening + natural voice loaded →
 "Hey Afronet" wake word (custom openWakeWord model, opt-in Hands-free mode, only while the app is
 open on screen; mic button always stays) → polish (permissions, errors, 4 GB memory).
 
@@ -105,6 +104,24 @@ AI tool calling (LLM decides actions) is planned as a fallback but NOT built: in
 token costs ~0.3 s on a slow CPU (llama.cpp prompt reading has no fast WASM matmul), so tool
 schemas/calls would add many seconds — measure first.
 
+Natural voice (decided with the user: **100% offline, male British**): Kokoro **George**
+(`kokoro_bm_george`, top-graded British male with Fable) via Moonshine TTS, language `en_gb` (uses
+the `en_us` G2P files), 10 files / 109 MB from `download.moonshine.ai/tts/` (UNVERSIONED paths →
+sizes verified on download; a changed file is rejected and the built-in voice stays).
+`lib/voice/moonshine-tts.ts` drives the library's internal `tts-worker-host.js` directly, not its
+`TextToSpeech` class: that class's stop() never resolves a pending say(), only say() is off the main
+thread, and it keeps extra copies of the voice in memory. Engine: prepare() synthesizes the next
+sentence while the current plays; stop() always resolves the playing speak().
+Slowness (measured 12–43× real time on a memory-starved laptop) is detected fast: calibration phrase
+after load (10 s cap), 4 s limit per sentence (then that sentence is said with the built-in voice),
+running average > 1.3. A too-slow device retires the voice (worker closed, memory freed) and skips
+loading it for 7 days (`afronet.voice.tooSlowAt`). The built-in voice is ALWAYS the fallback.
+Setup: fresh installs download everything in one go (~579 MB: chat 405 + listening 65 + voice 109);
+the voice is optional — its failure never fails setup. Existing installs get a non-blocking
+"natural voice available" offer (`VoiceOffer.vue`, download only on tap).
+Verified in Node with the app's exact files/options: engine loads, 24 kHz audio. NOT yet verified
+in a browser (worker path, playback) or on the phone.
+
 Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
 answers); speech is interruptible (mic tap / "stop"); show what was heard on screen (no spoken
 "You asked …" echo — user's choice, it delays the answer); "Sorry, I didn't catch that" on empty/unclear; destructive commands ask
@@ -113,6 +130,10 @@ answers); speech is interruptible (mic tap / "stop"); show what was heard on scr
 ## Future features (not V1)
 
 - Resumable model download (today an interrupted download restarts from 0)
+- Custom Afronet voice with an African English accent: record a consenting speaker (1–3 h, clean
+  audio, script incl. African names/places), fine-tune a Piper voice (Kokoro has no public training
+  code), convert to `.ort`; swap in behind the TTS interface
+- Self-host the voice files (the Moonshine TTS CDN paths are unversioned)
 - More languages (STT, voices, command phrases), iOS support, lite model for weakest phones
 - Wake word with the screen off / app in background (needs a native Android app)
 

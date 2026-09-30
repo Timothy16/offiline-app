@@ -4,6 +4,7 @@
 import type { LLMEngine } from '~/lib/llm/types'
 import { WllamaEngine } from '~/lib/llm/wllama-engine'
 import { MoonshineSTT } from '~/lib/voice/moonshine-stt'
+import { MoonshineTTS } from '~/lib/voice/moonshine-tts'
 
 // No app shell here: the layout would load the app's own models alongside the benchmark's.
 definePageMeta({ layout: false })
@@ -127,7 +128,7 @@ async function run(c: Config) {
 
 onMounted(async () => {
   // Hook for automated end-to-end tests of the speech engine (this page is removed before launch).
-  ;(window as any).__afronetBench = { MoonshineSTT }
+  ;(window as any).__afronetBench = { MoonshineSTT, MoonshineTTS }
 
   let webgpu = 'no'
   const gpu = (navigator as any).gpu

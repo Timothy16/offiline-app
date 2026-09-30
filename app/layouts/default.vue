@@ -125,6 +125,8 @@ onBeforeUnmount(() => {
       <button v-if="route.path === '/' && messages.length && !busy" class="link" @click="clear()">New chat</button>
     </nav>
 
+    <VoiceOffer />
+
     <slot />
 
     <VoiceMic v-if="!route.meta.micInComposer" floating />

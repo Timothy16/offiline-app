@@ -9,14 +9,27 @@ export interface TTSStatus {
   offline: boolean
   /** Human-readable voice name, for debugging and settings. */
   voice: string
+  /** For downloadable voices: bytes still to fetch before it can be used. 0 when on the device. */
+  downloadBytes?: number
 }
 
 export interface TTSEngine {
   inspect(): Promise<TTSStatus>
+  /** Downloadable voices only: fetch (first time) and initialise. Safe to call more than once. */
+  load?(onProgress?: (p: LoadProgress) => void): Promise<void>
+  /** Start preparing the next sentence while the current one plays, so there is no gap. */
+  prepare?(text: string): void
   /** Speak one short piece of text (a sentence). Resolves when finished or stopped. */
   speak(text: string): Promise<void>
   /** Stop immediately and drop anything in progress. */
   stop(): void
+  /**
+   * True when this engine can't keep up on this device (speech would stutter); the caller should
+   * switch to a lighter voice.
+   */
+  readonly tooSlow?: boolean
+  /** Free the engine's memory and workers (e.g. once it turned out too slow). */
+  dispose?(): void
 }
 
 export interface STTStatus {

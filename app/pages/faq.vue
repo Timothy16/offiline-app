@@ -8,7 +8,7 @@ definePageMeta({
 const FAQS = [
   { q: 'What is Afronet?', a: 'Afronet is an assistant that runs on your phone. You can talk to it or type, and it answers without using the internet.' },
   { q: 'Do I need internet to use it?', a: 'Only once, to download the AI and voice. After that everything works offline.' },
-  { q: 'How much data does setup use?', a: 'About 470 megabytes, one time. Use Wi-Fi if you can.' },
+  { q: 'How much data does setup use?', a: 'About 580 megabytes, one time. Use Wi-Fi if you can.' },
   { q: 'Is what I say private?', a: 'Yes. Your voice and questions stay on your phone. Nothing is sent anywhere.' },
   { q: 'How do I talk to Afronet?', a: 'Tap the microphone button and speak. It stops listening by itself when you finish.' },
   { q: 'What can I say?', a: 'Ask any question, or say things like go to chat, go to FAQ, go back, repeat, or stop. Say help to hear more.' },
