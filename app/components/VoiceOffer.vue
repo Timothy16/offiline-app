@@ -18,6 +18,29 @@ const visible = computed(() =>
   && (working.value || ((setup.voiceBytes.value > 0 || tooSlow.value) && !dismissed.value)),
 )
 
+// "Hear it anyway": proves the natural voice works here and shows how slow it is (it needs to
+// make speech faster than it plays — under 1× — for conversation).
+const speech = useSpeech()
+const previewing = ref(false)
+const previewText = ref('')
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`
+
+async function preview() {
+  previewing.value = true
+  try {
+    const { synthMs, audioMs } = await speech.previewNatural()
+    previewText.value = `Natural voice works: ${seconds(synthMs)} to make ${seconds(audioMs)} of speech `
+      + `(${(synthMs / audioMs).toFixed(1)}× — needs under 1.3× for conversation).`
+  }
+  catch (err) {
+    console.warn('[afronet] natural voice preview failed:', err)
+    previewText.value = `The natural voice failed to play: ${err instanceof Error ? err.message : err}`
+  }
+  finally {
+    previewing.value = false
+  }
+}
+
 function dismiss() {
   dismissed.value = true
   try {
@@ -44,8 +67,13 @@ onMounted(() => {
     </template>
     <span v-else-if="setup.voicePhase.value === 'initializing'">Preparing natural voice…</span>
     <template v-else-if="tooSlow">
-      <span>The natural voice is too slow on this device, so the phone's voice is used.</span>
-      <button class="link" @click="dismiss()">OK</button>
+      <span>{{ previewText || "The natural voice is too slow on this device, so the phone's voice is used." }}</span>
+      <span class="actions">
+        <button class="link" :disabled="previewing" @click="preview()">
+          {{ previewing ? 'Preparing…' : 'Hear it anyway' }}
+        </button>
+        <button class="link" @click="dismiss()">OK</button>
+      </span>
     </template>
     <template v-else>
       <span>

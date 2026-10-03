@@ -239,6 +239,15 @@ async function loadNatural(onProgress?: (p: LoadProgress) => void): Promise<'rea
   return 'ready'
 }
 
+/**
+ * Let someone hear the natural voice even where it was judged too slow: one sentence, no time
+ * limit, on a short-lived worker. Doesn't change which voice the app uses.
+ */
+async function previewNatural(): Promise<{ synthMs: number, audioMs: number }> {
+  stop()
+  return new MoonshineTTS().preview('Hello, this is the natural voice. This is how I sound.')
+}
+
 export function useSpeech() {
   return {
     enabled: readonly(enabled),
@@ -253,6 +262,7 @@ export function useSpeech() {
     init,
     inspectNatural,
     loadNatural,
+    previewNatural,
     say,
     stream,
     stop,

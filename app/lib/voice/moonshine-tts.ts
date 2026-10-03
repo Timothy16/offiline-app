@@ -59,6 +59,26 @@ interface TtsWorkerHost {
   close(): void
 }
 
+/** Start the library's TTS worker with the voice files from Cache Storage. */
+async function startHost(): Promise<TtsWorkerHost> {
+  const keys = Object.keys(FILES)
+  const buffers = await Promise.all(keys.map(name => readAsset(ASSET_BASE, name)))
+  // Served unbundled from /vendor/ like the rest of the library (see modules/moonshine-vendor.ts).
+  const { TtsWorkerHost } = await import(/* @vite-ignore */ `${MOONSHINE_BASE}tts-worker-host.js`) as {
+    TtsWorkerHost: new () => TtsWorkerHost
+  }
+  const host = new TtsWorkerHost()
+  try {
+    // The worker gets its own copy; ours is released when this function returns.
+    await host.setEngine({ language: LANGUAGE, keys, buffers, optionNames: ['voice'], optionValues: [VOICE] })
+  }
+  catch (err) {
+    host.close()
+    throw err
+  }
+  return host
+}
+
 export class MoonshineTTS implements TTSEngine {
   private host: TtsWorkerHost | null = null
   private loadPromise: Promise<void> | null = null
@@ -105,21 +125,7 @@ export class MoonshineTTS implements TTSEngine {
       }
       onProgress?.({ phase: 'init', loaded: 0, total: 0 })
 
-      const keys = Object.keys(FILES)
-      const buffers = await Promise.all(keys.map(name => readAsset(ASSET_BASE, name)))
-      // Served unbundled from /vendor/ like the rest of the library (see modules/moonshine-vendor.ts).
-      const { TtsWorkerHost } = await import(/* @vite-ignore */ `${MOONSHINE_BASE}tts-worker-host.js`) as {
-        TtsWorkerHost: new () => TtsWorkerHost
-      }
-      const host = new TtsWorkerHost()
-      try {
-        // The worker gets its own copy; ours is released when this function returns.
-        await host.setEngine({ language: LANGUAGE, keys, buffers, optionNames: ['voice'], optionValues: [VOICE] })
-      }
-      catch (err) {
-        host.close()
-        throw err
-      }
+      const host = await startHost()
       this.host = host
 
       // Can this device keep up? One short phrase decides, before the user ever waits on it.
@@ -139,6 +145,41 @@ export class MoonshineTTS implements TTSEngine {
       throw err
     })
     return this.loadPromise
+  }
+
+  /**
+   * Say one sentence with no speed limit, on a worker of its own that is closed afterwards — so
+   * someone can hear the voice even on a device that was judged too slow for conversation.
+   * Needs the files on the device. Returns how long synthesis took vs. how long the audio lasts.
+   */
+  async preview(text: string): Promise<{ synthMs: number, audioMs: number }> {
+    if ((await missingAssets(ASSET_BASE, FILES)).length) throw new Error('Natural voice is not downloaded')
+    const host = await startHost()
+    try {
+      const started = performance.now()
+      const result = await host.synthesize(text)
+      const synthMs = performance.now() - started
+      const audioMs = (result.audio.length / result.sampleRate) * 1000
+      const ctx = new AudioContext()
+      try {
+        const buffer = ctx.createBuffer(1, result.audio.length, result.sampleRate)
+        buffer.copyToChannel(result.audio as Float32Array<ArrayBuffer>, 0)
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+        source.connect(ctx.destination)
+        await new Promise<void>((resolve) => {
+          source.onended = () => resolve()
+          source.start()
+        })
+      }
+      finally {
+        void ctx.close().catch(() => {})
+      }
+      return { synthMs, audioMs }
+    }
+    finally {
+      host.close()
+    }
   }
 
   private synthesize(text: string): Promise<Synthesized> {

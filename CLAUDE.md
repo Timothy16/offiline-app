@@ -121,8 +121,12 @@ loading it for 7 days (`afronet.voice.tooSlowAt`). The built-in voice is ALWAYS 
 Setup: fresh installs download everything in one go (~579 MB: chat 405 + listening 65 + voice 109);
 the voice is optional — its failure never fails setup. Existing installs get a non-blocking
 "natural voice available" offer (`VoiceOffer.vue`, download only on tap).
-Verified in Node with the app's exact files/options: engine loads, 24 kHz audio. NOT yet verified
-in a browser (worker path, playback) or on the phone.
+Verified in a desktop browser (worker path, playback: user heard Emma); on the memory-starved test
+PC it fails the speed check, as expected. "Hear it anyway" in the too-slow banner plays one sentence
+with no time limit (own short-lived worker) and shows the speed — proves the voice works on a device
+judged too slow. NOT yet verified on the phone.
+`npm run dev` sends the same COOP/COEP headers (`$development` in nuxt.config): without
+crossOriginIsolated Moonshine's threaded WASM throws inside the library and setup spins forever.
 
 Rules: the app speaks **everything** (screen announcements, command confirmations, AI and FAQ
 answers); speech is interruptible (mic tap / "stop"); show what was heard on screen (no spoken

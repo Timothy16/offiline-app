@@ -119,6 +119,12 @@ export class MoonshineSTT implements STTEngine {
       }
       onProgress?.({ phase: 'init', loaded: 0, total: 0 })
 
+      // Moonshine's threaded WASM needs SharedArrayBuffer; without isolation it fails inside the
+      // library with an uncaught error and loadFromUrls() never settles (setup would spin forever).
+      if (!crossOriginIsolated) {
+        throw new Error('Speech recognition needs a cross-origin isolated page (COOP/COEP headers missing)')
+      }
+
       // Loaded on demand so the app shell stays small.
       this.lib = await import(/* @vite-ignore */ LIB_URL) as MoonshineLib
       this.transcriber = await this.lib.Transcriber.loadFromUrls(

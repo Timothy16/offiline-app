@@ -14,6 +14,17 @@ export default defineNuxtConfig({
   // so vercel.json headers and .output/public behave exactly like the local preview.
   nitro: { preset: 'static' },
 
+  // Same COOP/COEP headers as Vercel and serve.json, so `npm run dev` is crossOriginIsolated too:
+  // Moonshine's threaded WASM can't start without it (and wllama would fall back to one thread).
+  $development: {
+    routeRules: {
+      '/**': { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
+    },
+    vite: {
+      server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
+    },
+  },
+
   modules: ['@vite-pwa/nuxt'],
 
   app: {
